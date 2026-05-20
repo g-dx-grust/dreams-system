@@ -59,7 +59,6 @@ supabase/.temp
 !.vscode/extensions.json
 
 # generated
-src/types/database.ts
 
 # large source template archives are stored outside Git/Supabase Storage
 docs/05申請様式/
