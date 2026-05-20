@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Download, FileText, Files } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
@@ -23,6 +23,9 @@ type Props = {
 
 export function DocumentGenerateForm({ caseId, templates }: Props) {
   const [templateId, setTemplateId] = useState<string>("");
+  const [selectedTemplateIds, setSelectedTemplateIds] = useState<number[]>(() =>
+    templates.map((template) => template.id),
+  );
   const [highlight, setHighlight] = useState(true);
   const [checking, setChecking] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -36,6 +39,44 @@ export function DocumentGenerateForm({ caseId, templates }: Props) {
   } | null>(null);
   const [generated, setGenerated] = useState<GeneratedDocumentResult | null>(null);
   const [bulkGenerated, setBulkGenerated] = useState<BulkGenerateResult | null>(null);
+
+  useEffect(() => {
+    setSelectedTemplateIds((current) => {
+      const availableIds = new Set(templates.map((template) => template.id));
+      const kept = current.filter((id) => availableIds.has(id));
+      return kept.length > 0 ? kept : templates.map((template) => template.id);
+    });
+  }, [templates]);
+
+  const selectedTemplateSet = useMemo(
+    () => new Set(selectedTemplateIds),
+    [selectedTemplateIds],
+  );
+  const selectedTemplates = useMemo(
+    () => templates.filter((template) => selectedTemplateSet.has(template.id)),
+    [selectedTemplateSet, templates],
+  );
+
+  function handleToggleTemplate(id: number, checked: boolean) {
+    setBulkGenerated(null);
+    setError(null);
+    setSelectedTemplateIds((current) => {
+      if (checked) return Array.from(new Set([...current, id]));
+      return current.filter((templateId) => templateId !== id);
+    });
+  }
+
+  function handleSelectAll() {
+    setBulkGenerated(null);
+    setError(null);
+    setSelectedTemplateIds(templates.map((template) => template.id));
+  }
+
+  function handleClearSelection() {
+    setBulkGenerated(null);
+    setError(null);
+    setSelectedTemplateIds([]);
+  }
 
   async function handleCheck() {
     if (!templateId) return;
@@ -77,7 +118,7 @@ export function DocumentGenerateForm({ caseId, templates }: Props) {
   }
 
   async function handleBulkGenerate() {
-    if (templates.length === 0) return;
+    if (selectedTemplateIds.length === 0) return;
     setError(null);
     setGenerated(null);
     setPreview(null);
@@ -85,6 +126,7 @@ export function DocumentGenerateForm({ caseId, templates }: Props) {
     try {
       const result = await generateCaseDocuments({
         caseId,
+        templateIds: selectedTemplateIds,
         highlight,
       });
       if (!result.ok) {
@@ -103,29 +145,120 @@ export function DocumentGenerateForm({ caseId, templates }: Props) {
         <CardTitle>帳票を生成する</CardTitle>
       </CardHeader>
       <CardBody>
-        <div className="flex w-full max-w-[48rem] min-w-0 flex-col gap-m">
-          <Field label="テンプレートを選択" required>
-            <Select
-              value={templateId}
-              onChange={(e) => {
-                setTemplateId(e.target.value);
-                setPreview(null);
-                setGenerated(null);
-                setBulkGenerated(null);
-                setError(null);
-              }}
-            >
-              <option value="">選択してください</option>
-              {templates.map((t) => (
-                <option key={t.id} value={String(t.id)}>
-                  [{t.category_name}]
-                  {t.location_label ? ` [${t.location_label}]` : ""}
-                  {" "}
-                  {t.name} v{t.version} (.{t.file_type})
-                </option>
-              ))}
-            </Select>
-          </Field>
+        <div className="flex w-full min-w-0 flex-col gap-m">
+          <div className="grid gap-m xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.25fr)]">
+            <div className="flex min-w-0 flex-col gap-m">
+              <Field label="単票生成" required>
+                <Select
+                  value={templateId}
+                  onChange={(e) => {
+                    setTemplateId(e.target.value);
+                    setPreview(null);
+                    setGenerated(null);
+                    setBulkGenerated(null);
+                    setError(null);
+                  }}
+                >
+                  <option value="">選択してください</option>
+                  {templates.map((t) => (
+                    <option key={t.id} value={String(t.id)}>
+                      [{t.category_name}]
+                      {t.location_label ? ` [${t.location_label}]` : ""}
+                      {" "}
+                      {t.name} v{t.version} (.{t.file_type})
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+
+              <div className="flex flex-wrap gap-xs">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleCheck}
+                  loading={checking}
+                  disabled={!templateId || generating || bulkGenerating}
+                >
+                  転記前チェック
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleGenerate}
+                  loading={generating}
+                  disabled={!templateId || bulkGenerating || (preview?.missingRequired?.length ?? 0) > 0}
+                >
+                  選択した帳票を生成する
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex min-w-0 flex-col gap-s rounded-s border border-border bg-background p-m">
+              <div className="flex flex-wrap items-center justify-between gap-s">
+                <div className="flex items-center gap-xs">
+                  <Files size={16} className="text-main" />
+                  <span className="text-s font-medium">
+                    一括生成 {selectedTemplates.length} / {templates.length} 件
+                  </span>
+                </div>
+                <div className="flex items-center gap-xs">
+                  <Button type="button" variant="text" size="sm" onClick={handleSelectAll}>
+                    全選択
+                  </Button>
+                  <Button type="button" variant="text" size="sm" onClick={handleClearSelection}>
+                    解除
+                  </Button>
+                </div>
+              </div>
+
+              {templates.length === 0 ? (
+                <p className="text-s text-text-grey">この案件で生成できるテンプレートがありません。</p>
+              ) : (
+                <div className="max-h-[280px] overflow-y-auto rounded-s border border-border bg-white">
+                  {templates.map((template) => (
+                    <label
+                      key={template.id}
+                      className="flex min-w-0 cursor-pointer items-start gap-s border-b border-border px-s py-s last:border-b-0 hover:bg-grey-7"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedTemplateSet.has(template.id)}
+                        onChange={(e) => handleToggleTemplate(template.id, e.target.checked)}
+                        className="mt-[3px] h-4 w-4 shrink-0 rounded border-border"
+                        disabled={bulkGenerating}
+                      />
+                      <span className="flex min-w-0 flex-1 flex-col gap-xxs">
+                        <span className="flex min-w-0 flex-wrap items-center gap-xs">
+                          <Badge tone="info">{template.category_name}</Badge>
+                          {template.location_label && (
+                            <Badge tone="neutral">{template.location_label}</Badge>
+                          )}
+                          <Badge tone="neutral">.{template.file_type}</Badge>
+                          <span className="min-w-0 truncate font-medium" title={template.name}>
+                            {template.name}
+                          </span>
+                        </span>
+                        <span className="text-xs text-text-grey">v{template.version}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+
+              <Button
+                type="button"
+                variant="primary"
+                onClick={handleBulkGenerate}
+                loading={bulkGenerating}
+                loadingLabel="一括生成中…"
+                disabled={
+                  selectedTemplateIds.length === 0 || checking || generating || templates.length === 0
+                }
+              >
+                選択した帳票を一括生成
+              </Button>
+            </div>
+          </div>
 
           <label className="flex items-center gap-xs text-s cursor-pointer">
             <input
@@ -232,35 +365,6 @@ export function DocumentGenerateForm({ caseId, templates }: Props) {
             </div>
           )}
 
-          <div className="flex flex-wrap gap-xs">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={handleCheck}
-              loading={checking}
-              disabled={!templateId || generating || bulkGenerating}
-            >
-              転記前チェック
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={handleGenerate}
-              loading={generating}
-              disabled={!templateId || bulkGenerating || (preview?.missingRequired?.length ?? 0) > 0}
-            >
-              選択した帳票を生成する
-            </Button>
-            <Button
-              type="button"
-              variant="primary"
-              onClick={handleBulkGenerate}
-              loading={bulkGenerating}
-              disabled={templates.length === 0 || checking || generating}
-            >
-              関連帳票をまとめて生成
-            </Button>
-          </div>
         </div>
       </CardBody>
     </Card>

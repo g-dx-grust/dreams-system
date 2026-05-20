@@ -26,6 +26,8 @@ ALTER TABLE public.persons
 CREATE INDEX IF NOT EXISTS idx_persons_default_case_role
     ON public.persons (default_case_role);
 
+DROP FUNCTION IF EXISTS public.list_persons_safe(TEXT, TEXT, INTEGER, INTEGER);
+
 CREATE OR REPLACE FUNCTION public.list_persons_safe(
     p_q TEXT DEFAULT NULL,
     p_person_type TEXT DEFAULT NULL,

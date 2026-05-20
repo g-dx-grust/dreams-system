@@ -19,6 +19,7 @@
     "templates:import": "node scripts/import-templates.mjs",
     "templates:upload-originals": "node scripts/upload-template-originals.mjs",
     "mapping:toyohashi-check": "node scripts/setup-toyohashi-mapping-check.mjs",
+    "demo:seed-persons": "node scripts/seed-demo-persons.mjs",
     "db:types": "supabase gen types typescript --linked > src/types/database.ts",
     "db:push": "supabase db push",
     "db:reset": "supabase db reset"
