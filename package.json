@@ -17,6 +17,7 @@
     "docs:screenshots:install": "playwright install chromium",
     "docs:pdf": "node scripts/export-user-manual-pdf.mjs",
     "templates:import": "node scripts/import-templates.mjs",
+    "templates:upload-originals": "node scripts/upload-template-originals.mjs",
     "mapping:toyohashi-check": "node scripts/setup-toyohashi-mapping-check.mjs",
     "db:types": "supabase gen types typescript --linked > src/types/database.ts",
     "db:push": "supabase db push",
