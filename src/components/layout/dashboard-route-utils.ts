@@ -6,6 +6,7 @@ export type RouteCrumb = { label: string; href?: string };
 
 const TOP_LABELS: Record<string, string> = {
   cases: "案件",
+  calendar: "カレンダー",
   map: "地図",
   persons: "関係者台帳",
   documents: "帳票履歴",

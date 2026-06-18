@@ -3,6 +3,7 @@
 import * as React from "react";
 import { usePathname } from "next/navigation";
 import type { AppUser } from "@/lib/permissions";
+import { cn } from "@/lib/cn";
 import { SideNav } from "./side-nav";
 import { AppHeader } from "./app-header";
 import { isTemplateMappingWorkspace } from "./dashboard-route-utils";
@@ -26,6 +27,7 @@ export function AppShell({
   const pathname = usePathname();
   const [collapsed, setCollapsed] = React.useState(initialCollapsed);
   const [mobileOpen, setMobileOpen] = React.useState(false);
+  const isCalendarRoute = pathname === "/calendar" || pathname.startsWith("/calendar/");
 
   React.useEffect(() => {
     setMobileOpen(false);
@@ -67,9 +69,20 @@ export function AppShell({
           onCloseMobile={() => setMobileOpen(false)}
         />
         <div className="flex min-w-0 flex-1 flex-col">
-          <AppHeader user={user} signOutAction={signOutAction} onHamburger={() => setMobileOpen(true)} />
+          <AppHeader
+            user={user}
+            signOutAction={signOutAction}
+            onHamburger={() => setMobileOpen(true)}
+          />
           <main id="main-content" className="flex-1 overflow-x-hidden overflow-y-auto p-m">
-            <div className="mx-auto max-w-[1200px]">{children}</div>
+            <div
+              className={cn(
+                "mx-auto",
+                isCalendarRoute ? "max-w-none" : "max-w-[var(--width-content-max)]",
+              )}
+            >
+              {children}
+            </div>
           </main>
         </div>
       </div>

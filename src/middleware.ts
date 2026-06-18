@@ -13,6 +13,6 @@ export const config = {
      *  - favicon / 画像
      *  - api ルート (Server Action 内で個別に認証)
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import {
   BriefcaseBusiness,
+  CalendarDays,
   ContactRound,
   FileClock,
   LayoutDashboard,
@@ -31,6 +32,7 @@ type NavItem = {
 const items: NavItem[] = [
   { href: "/", label: "ダッシュボード", icon: LayoutDashboard, section: "workspace" },
   { href: "/cases", label: "案件", icon: BriefcaseBusiness, section: "workspace" },
+  { href: "/calendar", label: "カレンダー", icon: CalendarDays, section: "workspace" },
   { href: "/map", label: "地図", icon: MapPin, section: "workspace" },
   { href: "/persons", label: "関係者台帳", icon: ContactRound, section: "workspace" },
   { href: "/documents", label: "帳票履歴", icon: FileClock, section: "workspace" },
@@ -135,7 +137,10 @@ export function SideNav({
         )}
       </div>
 
-      <nav aria-label="メインメニュー" className="flex flex-1 flex-col gap-m overflow-y-auto px-s py-m">
+      <nav
+        aria-label="メインメニュー"
+        className="flex flex-1 flex-col gap-m overflow-y-auto px-s py-m"
+      >
         {sections.map((section) => {
           const sectionItems = visibleItems.filter((item) => item.section === section.key);
           if (sectionItems.length === 0) return null;

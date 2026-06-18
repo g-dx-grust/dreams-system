@@ -5,6 +5,8 @@
  */
 
 export const AuditActionLabels: Record<string, string> = {
+  "auth.login_success": "ログイン 成功",
+  "auth.login_failure": "ログイン 失敗",
   "case.create": "案件 作成",
   "case.update": "案件 更新",
   "case.delete": "案件 削除",
@@ -19,7 +21,14 @@ export const AuditActionLabels: Record<string, string> = {
   "template.update": "テンプレート 更新",
   "template.deactivate": "テンプレート 無効化",
   "document.generate": "帳票 生成",
+  "document.download": "帳票 ダウンロード",
   "map.coordinate_import": "座標点 取り込み",
+  "schedule.create": "予定 作成",
+  "schedule.update": "予定 更新",
+  "schedule.delete": "予定 削除",
+  "daily_report.save": "日報 保存",
+  "daily_report.submit": "日報 提出",
+  "comment.create": "コメント 投稿",
   "user.invite": "ユーザー 招待",
   "user.role_change": "ユーザー 権限変更",
   "user.deactivate": "ユーザー 無効化",
@@ -34,6 +43,10 @@ export const AuditEntityLabels: Record<string, string> = {
   document: "帳票",
   user: "ユーザー",
   map_coordinate_point: "座標点",
+  schedule: "予定",
+  daily_report: "日報",
+  comment: "コメント",
+  auth: "認証",
 };
 
 export function auditActionLabel(action: string): string {
@@ -48,13 +61,26 @@ export function auditEntityLabel(entityType: string | null): string {
 export function auditActionTone(
   action: string,
 ): "neutral" | "info" | "warning" | "success" | "danger" {
+  if (action === "auth.login_failure") return "danger";
+  if (action === "auth.login_success") return "success";
   if (action.endsWith(".delete") || action.endsWith(".remove") || action.endsWith(".deactivate")) {
     return "danger";
   }
-  if (action.endsWith(".create") || action.endsWith(".invite") || action.endsWith(".generate")) {
+  if (
+    action.endsWith(".create") ||
+    action.endsWith(".invite") ||
+    action.endsWith(".generate") ||
+    action.endsWith(".submit")
+  ) {
     return "success";
   }
-  if (action.endsWith(".update") || action.endsWith(".resync") || action.endsWith(".role_change")) {
+  if (
+    action.endsWith(".update") ||
+    action.endsWith(".save") ||
+    action.endsWith(".download") ||
+    action.endsWith(".resync") ||
+    action.endsWith(".role_change")
+  ) {
     return "info";
   }
   if (action.endsWith(".activate")) return "success";

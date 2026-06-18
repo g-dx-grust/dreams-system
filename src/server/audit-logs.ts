@@ -10,6 +10,7 @@ export type AuditLogRow = {
   action: string;
   entity_type: string | null;
   entity_id: number | null;
+  entity_id_uuid: string | null;
   detail: Record<string, unknown> | null;
   ip_address: string | null;
   created_at: string;
@@ -30,9 +31,7 @@ export type ListAuditLogsParams = {
   perPage?: number;
 };
 
-export async function listAuditLogs(
-  params: ListAuditLogsParams = {},
-): Promise<
+export async function listAuditLogs(params: ListAuditLogsParams = {}): Promise<
   ActionResult<{
     items: AuditLogRow[];
     total: number;
@@ -53,13 +52,9 @@ export async function listAuditLogs(
     entity_type: "entity_type",
   };
   const sortColumn = params.sort ? sortColumns[params.sort] : undefined;
-  const ascending = sortColumn
-    ? params.order === "asc"
-    : false; // 既定：created_at の降順
+  const ascending = sortColumn ? params.order === "asc" : false; // 既定：created_at の降順
 
-  let query = supabase
-    .from("audit_logs")
-    .select("*, users(full_name, email)", { count: "exact" });
+  let query = supabase.from("audit_logs").select("*, users(full_name, email)", { count: "exact" });
 
   if (params.action) query = query.eq("action", params.action);
   if (params.entityType) query = query.eq("entity_type", params.entityType);
@@ -73,7 +68,11 @@ export async function listAuditLogs(
     const safe = keyword.replace(/[,()*]/g, " ").trim();
     if (safe) {
       const like = `%${safe}%`;
-      const filters = [`action.ilike.${like}`, `entity_type.ilike.${like}`, `ip_address.ilike.${like}`];
+      const filters = [
+        `action.ilike.${like}`,
+        `entity_type.ilike.${like}`,
+        `ip_address.ilike.${like}`,
+      ];
       if (/^\d+$/.test(safe)) filters.push(`entity_id.eq.${safe}`);
       query = query.or(filters.join(","));
     }
@@ -92,6 +91,7 @@ export async function listAuditLogs(
     action: row.action,
     entity_type: row.entity_type,
     entity_id: row.entity_id,
+    entity_id_uuid: row.entity_id_uuid,
     detail:
       row.detail && typeof row.detail === "object" && !Array.isArray(row.detail)
         ? (row.detail as Record<string, unknown>)

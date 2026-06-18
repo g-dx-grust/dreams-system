@@ -362,32 +362,102 @@ export type Database = {
           },
         ]
       }
-      daily_reports: {
+      comments: {
         Row: {
           body: string
+          created_at: string
           id: string
-          report_date: string
-          submitted_at: string
+          target_id: string
+          target_type: string
           updated_at: string
           user_id: string
         }
         Insert: {
           body: string
+          created_at?: string
           id?: string
-          report_date: string
-          submitted_at?: string
+          target_id: string
+          target_type: string
           updated_at?: string
           user_id: string
         }
         Update: {
           body?: string
+          created_at?: string
           id?: string
-          report_date?: string
-          submitted_at?: string
+          target_id?: string
+          target_type?: string
           updated_at?: string
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "comments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      daily_reports: {
+        Row: {
+          body: string
+          content: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          lark_notified_at: string | null
+          report_date: string
+          status: string
+          submitted_at: string
+          updated_at: string
+          updated_by: string | null
+          user_id: string
+        }
+        Insert: {
+          body: string
+          content?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lark_notified_at?: string | null
+          report_date: string
+          status?: string
+          submitted_at?: string
+          updated_at?: string
+          updated_by?: string | null
+          user_id: string
+        }
+        Update: {
+          body?: string
+          content?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lark_notified_at?: string | null
+          report_date?: string
+          status?: string
+          submitted_at?: string
+          updated_at?: string
+          updated_by?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_reports_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "daily_reports_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "daily_reports_user_id_fkey"
             columns: ["user_id"]
@@ -705,14 +775,23 @@ export type Database = {
           co_user_ids: string[]
           created_at: string
           created_by: string | null
+          deleted_at: string | null
+          deleted_by: string | null
           end_at: string
           id: string
           is_all_day: boolean
+          lark_calendar_id: string | null
+          lark_event_etag: string | null
+          lark_event_id: string | null
+          last_synced_at: string | null
           location: string | null
           memo: string | null
           schedule_type_id: string | null
           start_at: string
           status: string
+          sync_error: string | null
+          sync_source: string
+          sync_status: string
           title: string
           updated_at: string
           updated_by: string | null
@@ -728,14 +807,23 @@ export type Database = {
           co_user_ids?: string[]
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           end_at: string
           id?: string
           is_all_day?: boolean
+          lark_calendar_id?: string | null
+          lark_event_etag?: string | null
+          lark_event_id?: string | null
+          last_synced_at?: string | null
           location?: string | null
           memo?: string | null
           schedule_type_id?: string | null
           start_at: string
           status?: string
+          sync_error?: string | null
+          sync_source?: string
+          sync_status?: string
           title: string
           updated_at?: string
           updated_by?: string | null
@@ -751,14 +839,23 @@ export type Database = {
           co_user_ids?: string[]
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           end_at?: string
           id?: string
           is_all_day?: boolean
+          lark_calendar_id?: string | null
+          lark_event_etag?: string | null
+          lark_event_id?: string | null
+          last_synced_at?: string | null
           location?: string | null
           memo?: string | null
           schedule_type_id?: string | null
           start_at?: string
           status?: string
+          sync_error?: string | null
+          sync_source?: string
+          sync_status?: string
           title?: string
           updated_at?: string
           updated_by?: string | null
@@ -776,6 +873,13 @@ export type Database = {
           {
             foreignKeyName: "schedules_created_by_fkey"
             columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedules_deleted_by_fkey"
+            columns: ["deleted_by"]
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]

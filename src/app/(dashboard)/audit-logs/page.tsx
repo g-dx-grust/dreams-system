@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { format } from "date-fns";
 import { getCurrentUser } from "@/lib/permissions";
 import { listAuditLogs } from "@/server/audit-logs";
 import { listUsers } from "@/server/users";
@@ -13,9 +14,12 @@ import {
   AuditLogsFilter,
   type AuditLogUserOption,
 } from "@/components/audit-logs/audit-logs-filter";
+import { AuditLogDetailDialog } from "@/components/audit-logs/audit-log-detail-dialog";
 import { auditActionLabel, auditActionTone, auditEntityLabel } from "@/lib/audit-labels";
 
 const ACTION_OPTIONS = [
+  "auth.login_success",
+  "auth.login_failure",
   "case.create",
   "case.update",
   "case.delete",
@@ -27,9 +31,17 @@ const ACTION_OPTIONS = [
   "person.delete",
   "person.resync",
   "document.generate",
+  "document.download",
+  "map.coordinate_import",
   "template.upload",
   "template.update",
   "template.deactivate",
+  "schedule.create",
+  "schedule.update",
+  "schedule.delete",
+  "daily_report.save",
+  "daily_report.submit",
+  "comment.create",
   "user.invite",
   "user.role_change",
   "user.activate",
@@ -42,6 +54,11 @@ const ENTITY_OPTIONS = [
   "person",
   "document",
   "template",
+  "map_coordinate_point",
+  "schedule",
+  "daily_report",
+  "comment",
+  "auth",
   "user",
 ] as const;
 
@@ -57,11 +74,7 @@ type Search = {
   page?: string;
 };
 
-export default async function AuditLogsPage({
-  searchParams,
-}: {
-  searchParams: Promise<Search>;
-}) {
+export default async function AuditLogsPage({ searchParams }: { searchParams: Promise<Search> }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   if (user.role !== "admin") redirect("/");
@@ -103,11 +116,7 @@ export default async function AuditLogsPage({
       />
 
       <Card className="mb-m">
-        <AuditLogsFilter
-          users={users}
-          actions={ACTION_OPTIONS}
-          entityTypes={ENTITY_OPTIONS}
-        />
+        <AuditLogsFilter users={users} actions={ACTION_OPTIONS} entityTypes={ENTITY_OPTIONS} />
       </Card>
 
       <div className="mb-s flex items-center justify-between gap-m text-s text-text-grey">
@@ -142,51 +151,51 @@ export default async function AuditLogsPage({
               </TR>
             </THead>
             <TBody>
-              {items.map((item) => (
-                <TR key={item.id}>
-                  <TD className="whitespace-nowrap tabular-nums">
-                    {formatDateTime(item.created_at)}
-                  </TD>
-                  <TD>
-                    <div className="font-medium text-text-black">
-                      {item.user_name || item.user_email || "—"}
-                    </div>
-                    {item.user_name && item.user_email && (
-                      <div className="text-xs text-text-grey">{item.user_email}</div>
-                    )}
-                  </TD>
-                  <TD>
-                    <Badge tone={auditActionTone(item.action)}>
-                      {auditActionLabel(item.action)}
-                    </Badge>
-                  </TD>
-                  <TD className="whitespace-nowrap">
-                    {auditEntityLabel(item.entity_type)}
-                    {item.entity_id != null && (
-                      <span className="ml-xs text-xs text-text-grey tabular-nums">
-                        #{item.entity_id}
-                      </span>
-                    )}
-                  </TD>
-                  <TD className="max-w-[440px]">
-                    {item.detail ? (
-                      <details>
-                        <summary className="cursor-pointer text-s text-main">
-                          JSON を表示
-                        </summary>
-                        <pre className="mt-xs overflow-x-auto rounded-s bg-grey-6 p-s text-xs">
-                          {JSON.stringify(item.detail, null, 2)}
-                        </pre>
-                      </details>
-                    ) : (
-                      <span className="text-text-grey">—</span>
-                    )}
-                  </TD>
-                  <TD className="whitespace-nowrap text-xs text-text-grey tabular-nums">
-                    {item.ip_address ?? "—"}
-                  </TD>
-                </TR>
-              ))}
+              {items.map((item) => {
+                const entityDisplayId = formatEntityDisplayId(item.entity_id, item.entity_id_uuid);
+
+                return (
+                  <TR key={item.id}>
+                    <TD className="whitespace-nowrap tabular-nums">
+                      {formatDateTime(item.created_at)}
+                    </TD>
+                    <TD>
+                      <div className="font-medium text-text-black">
+                        {item.user_name || item.user_email || "—"}
+                      </div>
+                      {item.user_name && item.user_email && (
+                        <div className="text-xs text-text-grey">{item.user_email}</div>
+                      )}
+                    </TD>
+                    <TD>
+                      <Badge tone={auditActionTone(item.action)}>
+                        {auditActionLabel(item.action)}
+                      </Badge>
+                    </TD>
+                    <TD className="whitespace-nowrap">
+                      {auditEntityLabel(item.entity_type)}
+                      {entityDisplayId && (
+                        <span
+                          className="ml-xs text-xs text-text-grey tabular-nums"
+                          title={entityDisplayId.full}
+                        >
+                          {entityDisplayId.short}
+                        </span>
+                      )}
+                    </TD>
+                    <TD className="whitespace-nowrap">
+                      <AuditLogDetailDialog
+                        detail={item.detail}
+                        actionLabel={auditActionLabel(item.action)}
+                        entityLabel={auditEntityLabel(item.entity_type)}
+                      />
+                    </TD>
+                    <TD className="whitespace-nowrap text-xs text-text-grey tabular-nums">
+                      {item.ip_address ?? "—"}
+                    </TD>
+                  </TR>
+                );
+              })}
             </TBody>
           </Table>
         </Card>
@@ -249,5 +258,17 @@ function PaginationLink({
 }
 
 function formatDateTime(value: string): string {
-  return new Date(value).toLocaleString("ja-JP");
+  return format(new Date(value), "yyyy/MM/dd HH:mm:ss");
+}
+
+function formatEntityDisplayId(
+  entityId: number | null,
+  entityIdUuid: string | null,
+): { short: string; full: string } | null {
+  if (entityId != null) {
+    const value = `#${entityId}`;
+    return { short: value, full: value };
+  }
+  if (!entityIdUuid) return null;
+  return { short: `#${entityIdUuid.slice(0, 8)}`, full: `#${entityIdUuid}` };
 }
