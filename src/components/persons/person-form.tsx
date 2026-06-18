@@ -8,8 +8,11 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Radio } from "@/components/ui/radio";
 import { Button } from "@/components/ui/button";
-import { Card, CardBody } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardBody } from "@/components/ui/card";
+import { SaveBar } from "@/components/ui/save-bar";
+import { useToast } from "@/components/ui/toast";
 import { PREFECTURES } from "@/lib/prefectures";
 import { PersonUpsertSchema, type PersonUpsertInput } from "@/lib/validators/person";
 import { CASE_PERSON_ROLES, CasePersonRoleLabels } from "@/lib/validators/case";
@@ -23,6 +26,7 @@ type Props = {
 
 export function PersonForm({ mode, personId, defaultValues }: Props) {
   const router = useRouter();
+  const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [duplicates, setDuplicates] = useState<DuplicateCandidate[]>([]);
@@ -33,7 +37,7 @@ export function PersonForm({ mode, personId, defaultValues }: Props) {
     handleSubmit,
     watch,
     setValue,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<PersonUpsertInput>({
     resolver: zodResolver(PersonUpsertSchema),
     defaultValues: {
@@ -68,9 +72,9 @@ export function PersonForm({ mode, personId, defaultValues }: Props) {
       };
       const first = data.results?.[0];
       if (first) {
-        setValue("address_pref", first.address1);
-        setValue("address_city", first.address2);
-        setValue("address_town", first.address3);
+        setValue("address_pref", first.address1, { shouldDirty: true });
+        setValue("address_city", first.address2, { shouldDirty: true });
+        setValue("address_town", first.address3, { shouldDirty: true });
       }
     } catch {
       // 住所補完は失敗してもフォーム送信を妨げない
@@ -87,66 +91,75 @@ export function PersonForm({ mode, personId, defaultValues }: Props) {
         setSubmitError(res.error);
         return;
       }
+      toast({
+        message: mode === "create" ? "登録しました" : "保存しました",
+        tone: "success",
+      });
       router.push(`/persons/${res.data.id}`);
     });
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-l">
+    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-m">
       <Card>
+        <CardHeader>
+          <CardTitle>基本情報</CardTitle>
+        </CardHeader>
         <CardBody className="flex flex-col gap-m">
-          <h2 className="text-l font-medium">基本情報</h2>
+          <div className="grid grid-cols-1 gap-m sm:grid-cols-2">
+            <Field label="区分" required error={errors.person_type?.message}>
+              <Controller
+                name="person_type"
+                control={control}
+                render={({ field }) => (
+                  <div className="flex h-8 items-center gap-l">
+                    <label className="flex cursor-pointer items-center gap-xs text-m">
+                      <Radio
+                        value="individual"
+                        checked={field.value === "individual"}
+                        onChange={() => field.onChange("individual")}
+                      />
+                      個人
+                    </label>
+                    <label className="flex cursor-pointer items-center gap-xs text-m">
+                      <Radio
+                        value="corporation"
+                        checked={field.value === "corporation"}
+                        onChange={() => field.onChange("corporation")}
+                      />
+                      法人
+                    </label>
+                  </div>
+                )}
+              />
+            </Field>
 
-          <Field label="区分" required error={errors.person_type?.message}>
-            <Controller
-              name="person_type"
-              control={control}
-              render={({ field }) => (
-                <div className="flex gap-m">
-                  <label className="flex items-center gap-xs text-s">
-                    <input
-                      type="radio"
-                      value="individual"
-                      checked={field.value === "individual"}
-                      onChange={() => field.onChange("individual")}
-                    />
-                    個人
-                  </label>
-                  <label className="flex items-center gap-xs text-s">
-                    <input
-                      type="radio"
-                      value="corporation"
-                      checked={field.value === "corporation"}
-                      onChange={() => field.onChange("corporation")}
-                    />
-                    法人
-                  </label>
-                </div>
-              )}
-            />
-          </Field>
+            <Field
+              label="案件での既定役割"
+              error={errors.default_case_role?.message}
+              hint="案件に追加するときの初期選択です。案件側で変更できます。"
+            >
+              <Select {...register("default_case_role")}>
+                <option value="">指定なし</option>
+                {CASE_PERSON_ROLES.map((r) => (
+                  <option key={r} value={r}>
+                    {CasePersonRoleLabels[r]}
+                  </option>
+                ))}
+              </Select>
+            </Field>
 
-          <Field
-            label="案件での既定役割"
-            error={errors.default_case_role?.message}
-            hint="案件に追加するときの初期選択です。案件側で変更できます。"
-          >
-            <Select {...register("default_case_role")} className="max-w-[240px]">
-              <option value="">指定なし</option>
-              {CASE_PERSON_ROLES.map((r) => (
-                <option key={r} value={r}>
-                  {CasePersonRoleLabels[r]}
-                </option>
-              ))}
-            </Select>
-          </Field>
+            <Field label="氏名・法人名" required error={errors.name?.message}>
+              <Input {...register("name")} />
+            </Field>
 
-          <Field label="氏名・法人名" required error={errors.name?.message}>
-            <Input {...register("name")} />
-          </Field>
+            <Field label="フリガナ" error={errors.name_kana?.message} hint="カタカナで入力">
+              <Input {...register("name_kana")} placeholder="ヤマダ タロウ" />
+            </Field>
+          </div>
 
           {duplicates.length > 0 && (
-            <div className="rounded-m border border-[rgba(255,204,23,0.6)] bg-[rgba(255,204,23,0.1)] p-s text-s">
+            <div className="rounded-s border border-warning bg-warning-soft p-s text-s">
               <p className="font-medium text-text-black">
                 この人物は既に登録されている可能性があります
               </p>
@@ -163,22 +176,19 @@ export function PersonForm({ mode, personId, defaultValues }: Props) {
               </ul>
             </div>
           )}
-
-          <Field label="フリガナ" error={errors.name_kana?.message}>
-            <Input {...register("name_kana")} placeholder="カタカナで入力" />
-          </Field>
         </CardBody>
       </Card>
 
       <Card>
+        <CardHeader>
+          <CardTitle>住所</CardTitle>
+        </CardHeader>
         <CardBody className="flex flex-col gap-m">
-          <h2 className="text-l font-medium">住所</h2>
-
           <Field label="郵便番号" error={errors.zip?.message} hint="7桁の数字（ハイフンなし）">
             <div className="flex items-center gap-s">
               <Input {...register("zip")} className="max-w-[180px]" placeholder="4418077" />
-              <Button type="button" variant="secondary" size="sm" onClick={searchZip}>
-                住所を補完
+              <Button type="button" variant="secondary" onClick={searchZip}>
+                住所を補完する
               </Button>
             </div>
           </Field>
@@ -198,15 +208,15 @@ export function PersonForm({ mode, personId, defaultValues }: Props) {
             <Field label="市区町村" error={errors.address_city?.message}>
               <Input {...register("address_city")} />
             </Field>
+
+            <Field label="町域・大字" error={errors.address_town?.message}>
+              <Input {...register("address_town")} />
+            </Field>
+
+            <Field label="番地" error={errors.address_line1?.message}>
+              <Input {...register("address_line1")} />
+            </Field>
           </div>
-
-          <Field label="町域・大字" error={errors.address_town?.message}>
-            <Input {...register("address_town")} />
-          </Field>
-
-          <Field label="番地" error={errors.address_line1?.message}>
-            <Input {...register("address_line1")} />
-          </Field>
 
           <Field label="建物名・部屋番号" error={errors.address_line2?.message}>
             <Input {...register("address_line2")} />
@@ -215,9 +225,10 @@ export function PersonForm({ mode, personId, defaultValues }: Props) {
       </Card>
 
       <Card>
-        <CardBody className="flex flex-col gap-m">
-          <h2 className="text-l font-medium">連絡先</h2>
-
+        <CardHeader>
+          <CardTitle>連絡先</CardTitle>
+        </CardHeader>
+        <CardBody>
           <div className="grid grid-cols-1 gap-m sm:grid-cols-2">
             <Field label="電話番号" error={errors.phone?.message}>
               <Input {...register("phone")} placeholder="例: 0532-00-0000" />
@@ -225,31 +236,36 @@ export function PersonForm({ mode, personId, defaultValues }: Props) {
             <Field label="FAX番号" error={errors.fax?.message}>
               <Input {...register("fax")} />
             </Field>
+            <Field label="メールアドレス" error={errors.email?.message} className="sm:col-span-2">
+              <Input type="email" {...register("email")} />
+            </Field>
           </div>
-
-          <Field label="メールアドレス" error={errors.email?.message}>
-            <Input type="email" {...register("email")} />
-          </Field>
         </CardBody>
       </Card>
 
       {personType === "corporation" && (
         <Card>
-          <CardBody className="flex flex-col gap-m">
-            <h2 className="text-l font-medium">法人情報</h2>
-            <Field label="法人番号" error={errors.corporate_number?.message} hint="13桁の数字">
-              <Input {...register("corporate_number")} />
-            </Field>
-            <Field label="代表者氏名" error={errors.representative_name?.message}>
-              <Input {...register("representative_name")} />
-            </Field>
+          <CardHeader>
+            <CardTitle>法人情報</CardTitle>
+          </CardHeader>
+          <CardBody>
+            <div className="grid grid-cols-1 gap-m sm:grid-cols-2">
+              <Field label="法人番号" error={errors.corporate_number?.message} hint="13桁の数字">
+                <Input {...register("corporate_number")} />
+              </Field>
+              <Field label="代表者氏名" error={errors.representative_name?.message}>
+                <Input {...register("representative_name")} />
+              </Field>
+            </div>
           </CardBody>
         </Card>
       )}
 
       <Card>
-        <CardBody className="flex flex-col gap-m">
-          <h2 className="text-l font-medium">メモ</h2>
+        <CardHeader>
+          <CardTitle>メモ</CardTitle>
+        </CardHeader>
+        <CardBody>
           <Field label="自由記述" error={errors.memo?.message}>
             <Textarea {...register("memo")} rows={4} />
           </Field>
@@ -257,12 +273,15 @@ export function PersonForm({ mode, personId, defaultValues }: Props) {
       </Card>
 
       {submitError && (
-        <p className="text-s text-danger" role="alert">
+        <div
+          className="rounded-s border border-danger bg-danger-soft p-s text-s text-danger"
+          role="alert"
+        >
           {submitError}
-        </p>
+        </div>
       )}
 
-      <div className="flex justify-end gap-s">
+      <SaveBar info={isDirty ? <>未保存の変更があります</> : null}>
         <Button
           type="button"
           variant="secondary"
@@ -271,10 +290,10 @@ export function PersonForm({ mode, personId, defaultValues }: Props) {
         >
           キャンセル
         </Button>
-        <Button type="submit" disabled={pending}>
-          {pending ? "送信中…" : mode === "create" ? "登録する" : "更新する"}
+        <Button type="submit" loading={pending} loadingLabel="保存中…">
+          {mode === "create" ? "登録する" : "更新する"}
         </Button>
-      </div>
+      </SaveBar>
     </form>
   );
 }

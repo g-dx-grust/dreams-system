@@ -222,7 +222,9 @@ const context: TransferContext = {
     {
       pref: "愛知県",
       city: "豊橋市",
+      oaza: "",
       aza: "大岩町字検証",
+      oazaAza: "大岩町字検証",
       chiban: "100-1",
       locationFull: "豊橋市大岩町字検証100-1",
       chimoku: "畑",
@@ -232,7 +234,9 @@ const context: TransferContext = {
     {
       pref: "愛知県",
       city: "豊橋市",
+      oaza: "",
       aza: "大岩町字検証",
+      oazaAza: "大岩町字検証",
       chiban: "100-2",
       locationFull: "豊橋市大岩町字検証100-2",
       chimoku: "田",
@@ -243,7 +247,9 @@ const context: TransferContext = {
   parcel: {
     pref: "愛知県",
     city: "豊橋市",
+    oaza: "",
     aza: "大岩町字検証",
+    oazaAza: "大岩町字検証",
     chiban: "100-1",
     locationFull: "豊橋市大岩町字検証100-1",
     chimoku: "畑",

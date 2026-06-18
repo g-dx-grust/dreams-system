@@ -1,6 +1,5 @@
 "use server";
 
-import { cache } from "react";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser, requireAdmin } from "@/lib/permissions";
@@ -22,6 +21,7 @@ import {
   type CaseFinancialInput,
 } from "@/lib/validators/case";
 import { type ActionResult, fail, ok } from "@/lib/result";
+import { getCaseSummary } from "@/server/case-summary";
 
 export type CaseRow = {
   id: number;
@@ -33,6 +33,8 @@ export type CaseRow = {
   submission_target: string | null;
   submission_date: string | null;
   deadline_date: string | null;
+  latitude: number | null;
+  longitude: number | null;
   memo: string | null;
   created_at: string;
   updated_at: string;
@@ -67,6 +69,7 @@ export type CaseParcelRow = {
   sort_order: number;
   pref: string | null;
   city: string | null;
+  oaza: string | null;
   aza: string | null;
   chiban: string | null;
   chimoku: string | null;
@@ -91,6 +94,15 @@ export type CurrentMasterMap = Record<
   { name: string; updated_at: string } | undefined
 >;
 
+const CASE_SORT_KEYS = [
+  "case_number",
+  "case_name",
+  "case_type",
+  "status",
+  "deadline",
+  "updated",
+] as const;
+
 export type ListCasesParams = {
   q?: string;
   caseType?: string;
@@ -99,6 +111,8 @@ export type ListCasesParams = {
   overdueOnly?: boolean;
   deadlineFrom?: string;
   deadlineTo?: string;
+  sort?: string;
+  order?: string;
   page?: number;
   perPage?: number;
 };
@@ -119,7 +133,13 @@ export async function listCases(params: ListCasesParams = {}): Promise<
       ? params.status
       : null;
 
-  const { data, error } = await supabase.rpc("list_cases_safe", {
+  const sortKey =
+    params.sort && (CASE_SORT_KEYS as readonly string[]).includes(params.sort) ? params.sort : null;
+  const sortOrder = params.order === "desc" ? "desc" : "asc";
+
+  // p_sort/p_order はソート指定時のみ渡す。マイグレーション 0014 未適用でも
+  // 既定一覧（ソートなし）は旧シグネチャで動作し続ける。
+  const rpcArgs = {
     p_q: params.q?.trim() || null,
     p_case_type: caseType,
     p_status: status,
@@ -129,7 +149,10 @@ export async function listCases(params: ListCasesParams = {}): Promise<
     p_overdue_only: params.overdueOnly ?? false,
     p_limit: perPage,
     p_offset: (page - 1) * perPage,
-  });
+    ...(sortKey ? { p_sort: sortKey, p_order: sortOrder } : {}),
+  };
+
+  const { data, error } = await supabase.rpc("list_cases_safe", rpcArgs);
 
   if (error) return fail("取得に失敗しました。時間をおいて再度お試しください。");
 
@@ -141,19 +164,54 @@ export async function listCases(params: ListCasesParams = {}): Promise<
   return ok({ items, total: Number.isFinite(total) ? Number(total) : 0, page, perPage });
 }
 
-export const getCaseSummary = cache(async (id: number): Promise<ActionResult<CaseRow>> => {
-  await requireUser();
+export type CaseSummaryBand = {
+  case: CaseRow;
+  assignedUserName: string | null;
+  // 税込請求額と未収（税込請求額 − 入金額）。case-financial-tab と同じ算出。
+  invoiceInclTax: number | null;
+  outstanding: number | null;
+};
+
+// 上部サマリ帯専用。getCaseSummary の戻り値型は多数のタブが依存しているため変更せず、
+// 帯に必要な担当者名・金額のみを追加で引いて返す。DB スキーマ変更は伴わない。
+export async function getCaseSummaryBand(id: number): Promise<ActionResult<CaseSummaryBand>> {
+  const caseRes = await getCaseSummary(id);
+  if (!caseRes.ok) return fail(caseRes.error);
+  const c = caseRes.data;
+
   const supabase = await createClient();
+  const userPromise = c.assigned_user_id
+    ? supabase
+        .from("users")
+        .select("full_name, email")
+        .eq("id", c.assigned_user_id)
+        .maybeSingle()
+        .then((res) => res.data)
+    : Promise.resolve(null);
 
-  const { data, error } = await supabase
-    .from("cases")
-    .select("*")
-    .eq("id", id)
-    .single();
+  const [user, financialRes] = await Promise.all([
+    userPromise,
+    supabase
+      .from("case_financials")
+      .select("invoice_amount, paid_amount, tax_rate")
+      .eq("case_id", id)
+      .maybeSingle(),
+  ]);
 
-  if (error || !data) return fail("案件が見つかりませんでした。");
-  return ok(data as CaseRow);
-});
+  const assignedUserName = user ? (user.full_name ?? user.email ?? null) : null;
+
+  const financial = financialRes.data;
+  let invoiceInclTax: number | null = null;
+  let outstanding: number | null = null;
+  if (financial && financial.invoice_amount != null) {
+    const taxRate = financial.tax_rate ?? 0;
+    const paid = financial.paid_amount ?? 0;
+    invoiceInclTax = Math.round(financial.invoice_amount * (1 + taxRate / 100));
+    outstanding = invoiceInclTax - paid;
+  }
+
+  return ok({ case: c, assignedUserName, invoiceInclTax, outstanding });
+}
 
 export type CaseDetail = {
   case: CaseRow;
@@ -298,6 +356,8 @@ export async function createCase(
     p_submission_date: parsed.data.submission_date || null,
     p_deadline_date: parsed.data.deadline_date || null,
     p_memo: parsed.data.memo ?? null,
+    p_latitude: parsed.data.latitude ?? null,
+    p_longitude: parsed.data.longitude ?? null,
   });
 
   const created = Array.isArray(data) ? data[0] : data;
@@ -340,6 +400,8 @@ export async function updateCase(
       submission_target: parsed.data.submission_target ?? null,
       submission_date: parsed.data.submission_date || null,
       deadline_date: parsed.data.deadline_date || null,
+      latitude: parsed.data.latitude ?? null,
+      longitude: parsed.data.longitude ?? null,
       memo: parsed.data.memo ?? null,
     })
     .eq("id", id);
@@ -378,6 +440,62 @@ export async function deleteCase(id: number): Promise<ActionResult<{ id: number 
 
   revalidatePath("/cases");
   return ok({ id });
+}
+
+// ================================================================
+// 一括操作（案件一覧）
+// ================================================================
+
+export async function bulkUpdateCaseStatus(
+  ids: number[],
+  status: string,
+): Promise<ActionResult<{ count: number }>> {
+  const user = await requireUser();
+  const targetIds = (ids ?? []).filter((v) => Number.isInteger(v) && v > 0);
+  if (targetIds.length === 0) return fail("対象の案件が選択されていません。");
+  if (!(CASE_STATUSES as readonly string[]).includes(status)) {
+    return fail("不正なステータスです。");
+  }
+
+  const supabase = await createClient();
+  const { data: before } = await supabase.from("cases").select("id, status").in("id", targetIds);
+
+  const { error } = await supabase.from("cases").update({ status }).in("id", targetIds);
+  if (error) return fail("ステータスの一括変更に失敗しました。");
+
+  await logAudit({
+    userId: user.id,
+    action: "case.update",
+    entityType: "case",
+    entityId: targetIds[0] ?? null,
+    detail: { action: "bulkUpdateCaseStatus", ids: targetIds, status, before },
+  });
+
+  revalidatePath("/cases");
+  return ok({ count: targetIds.length });
+}
+
+export async function bulkDeleteCases(ids: number[]): Promise<ActionResult<{ count: number }>> {
+  const user = await requireAdmin();
+  const targetIds = (ids ?? []).filter((v) => Number.isInteger(v) && v > 0);
+  if (targetIds.length === 0) return fail("対象の案件が選択されていません。");
+
+  const supabase = await createClient();
+  const { data: before } = await supabase.from("cases").select("*").in("id", targetIds);
+
+  const { error } = await supabase.from("cases").delete().in("id", targetIds);
+  if (error) return fail("案件の一括削除に失敗しました。");
+
+  await logAudit({
+    userId: user.id,
+    action: "case.delete",
+    entityType: "case",
+    entityId: targetIds[0] ?? null,
+    detail: { action: "bulkDeleteCases", ids: targetIds, before },
+  });
+
+  revalidatePath("/cases");
+  return ok({ count: targetIds.length });
 }
 
 // ================================================================
@@ -600,6 +718,7 @@ export async function upsertCaseParcels(
     sort_order: p.sort_order ?? i,
     pref: p.pref ?? null,
     city: p.city ?? null,
+    oaza: p.oaza ?? null,
     aza: p.aza ?? null,
     chiban: p.chiban ?? null,
     chimoku: p.chimoku ?? null,

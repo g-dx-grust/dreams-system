@@ -25,7 +25,9 @@ const EMPTY_PERSON: PersonContext = {
 const EMPTY_PARCEL: ParcelContext = {
   pref: "",
   city: "",
+  oaza: "",
   aza: "",
+  oazaAza: "",
   chiban: "",
   locationFull: "",
   chimoku: "",

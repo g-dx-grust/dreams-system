@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Plus, Trash2 } from "lucide-react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
-import { Card, CardBody } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { SaveBar } from "@/components/ui/save-bar";
 import { Select } from "@/components/ui/select";
-import { Field } from "@/components/ui/field";
+import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { useToast } from "@/components/ui/toast";
 import { PREFECTURES } from "@/lib/prefectures";
 import { upsertCaseParcels } from "@/server/cases";
 import type { CaseParcelRow } from "@/server/cases";
@@ -16,6 +18,7 @@ type ParcelFormRow = {
   sort_order: number;
   pref: string;
   city: string;
+  oaza: string;
   aza: string;
   chiban: string;
   chimoku: string;
@@ -34,6 +37,7 @@ function toFormRow(p: CaseParcelRow): ParcelFormRow {
     sort_order: p.sort_order,
     pref: p.pref ?? "",
     city: p.city ?? "",
+    oaza: p.oaza ?? "",
     aza: p.aza ?? "",
     chiban: p.chiban ?? "",
     chimoku: p.chimoku ?? "",
@@ -48,6 +52,7 @@ function emptyRow(sortOrder: number): ParcelFormRow {
     sort_order: sortOrder,
     pref: "",
     city: "",
+    oaza: "",
     aza: "",
     chiban: "",
     chimoku: "",
@@ -57,6 +62,13 @@ function emptyRow(sortOrder: number): ParcelFormRow {
   };
 }
 
+function formatArea(value: number): string {
+  return value.toLocaleString("ja-JP", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+}
+
 export function CaseParcelsTab({
   caseId,
   parcels,
@@ -64,9 +76,9 @@ export function CaseParcelsTab({
   caseId: number;
   parcels: CaseParcelRow[];
 }) {
+  const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
 
   const { register, control, handleSubmit, watch } = useForm<FormValues>({
     defaultValues: {
@@ -81,7 +93,6 @@ export function CaseParcelsTab({
 
   const onSubmit = (v: FormValues) => {
     setError(null);
-    setSaved(false);
     startTransition(async () => {
       const res = await upsertCaseParcels(
         caseId,
@@ -90,6 +101,7 @@ export function CaseParcelsTab({
           sort_order: i,
           pref: p.pref || undefined,
           city: p.city || undefined,
+          oaza: p.oaza || undefined,
           aza: p.aza || undefined,
           chiban: p.chiban || undefined,
           chimoku: p.chimoku || undefined,
@@ -102,83 +114,147 @@ export function CaseParcelsTab({
         setError(res.error);
         return;
       }
-      setSaved(true);
+      toast({ message: "土地情報を保存しました", tone: "success" });
     });
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-l">
-      {fields.map((f, i) => (
-        <Card key={f.id}>
-          <CardBody className="flex flex-col gap-m">
-            <div className="flex items-center justify-between">
-              <h3 className="text-m font-medium">筆 #{i + 1}</h3>
-              {fields.length > 1 && (
-                <Button
-                  type="button"
-                  variant="text"
-                  size="sm"
-                  onClick={() => remove(i)}
-                  disabled={pending}
-                >
-                  この筆を削除
-                </Button>
-              )}
-            </div>
+    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-m">
+      {error && (
+        <div
+          role="alert"
+          className="rounded-s border border-danger bg-danger-soft p-s text-s text-danger"
+        >
+          {error}
+        </div>
+      )}
 
-            <div className="grid grid-cols-1 gap-m sm:grid-cols-2">
-              <Field label="都道府県">
-                <Select {...register(`parcels.${i}.pref`)}>
-                  <option value="">選択してください</option>
-                  {PREFECTURES.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="市区町村">
-                <Input {...register(`parcels.${i}.city`)} />
-              </Field>
-            </div>
-
-            <div className="grid grid-cols-1 gap-m sm:grid-cols-2">
-              <Field label="大字・字">
-                <Input {...register(`parcels.${i}.aza`)} />
-              </Field>
-              <Field label="地番">
-                <Input {...register(`parcels.${i}.chiban`)} />
-              </Field>
-            </div>
-
-            <div className="grid grid-cols-1 gap-m sm:grid-cols-3">
-              <Field label="地目">
-                <Input {...register(`parcels.${i}.chimoku`)} placeholder="田 / 畑 / 宅地 など" />
-              </Field>
-              <Field label="地積（㎡）">
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  {...register(`parcels.${i}.area`)}
-                />
-              </Field>
-              <Field label="転用面積（㎡）">
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  {...register(`parcels.${i}.tenyo_area`)}
-                />
-              </Field>
-            </div>
-
-            <Field label="メモ">
-              <Input {...register(`parcels.${i}.memo`)} />
-            </Field>
-          </CardBody>
-        </Card>
-      ))}
+      <div className="overflow-hidden rounded-m border border-border bg-white">
+        <Table>
+          <THead>
+            <tr>
+              <TH className="w-10 text-right">No.</TH>
+              <TH>都道府県</TH>
+              <TH>市区町村</TH>
+              <TH>大字</TH>
+              <TH>字</TH>
+              <TH>地番</TH>
+              <TH>地目</TH>
+              <TH numeric>地積（㎡）</TH>
+              <TH numeric>転用面積（㎡）</TH>
+              <TH>備考</TH>
+              <TH className="w-10">
+                <span className="sr-only">操作</span>
+              </TH>
+            </tr>
+          </THead>
+          <TBody>
+            {fields.map((f, i) => (
+              <TR key={f.id}>
+                <TD numeric className="text-text-grey">
+                  {i + 1}
+                </TD>
+                <TD className="min-w-[8rem]">
+                  <Select aria-label={`${i + 1}行目 都道府県`} {...register(`parcels.${i}.pref`)}>
+                    <option value="">選択</option>
+                    {PREFECTURES.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </Select>
+                </TD>
+                <TD className="min-w-[7rem]">
+                  <Input
+                    aria-label={`${i + 1}行目 市区町村`}
+                    {...register(`parcels.${i}.city`)}
+                  />
+                </TD>
+                <TD className="min-w-[7rem]">
+                  <Input
+                    aria-label={`${i + 1}行目 大字`}
+                    placeholder="大字○○"
+                    {...register(`parcels.${i}.oaza`)}
+                  />
+                </TD>
+                <TD className="min-w-[7rem]">
+                  <Input
+                    aria-label={`${i + 1}行目 字`}
+                    placeholder="字○○"
+                    {...register(`parcels.${i}.aza`)}
+                  />
+                </TD>
+                <TD className="min-w-[6rem]">
+                  <Input
+                    aria-label={`${i + 1}行目 地番`}
+                    {...register(`parcels.${i}.chiban`)}
+                  />
+                </TD>
+                <TD className="min-w-[6rem]">
+                  <Input
+                    aria-label={`${i + 1}行目 地目`}
+                    placeholder="田 / 畑 / 宅地"
+                    {...register(`parcels.${i}.chimoku`)}
+                  />
+                </TD>
+                <TD numeric className="min-w-[7rem]">
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    aria-label={`${i + 1}行目 地積`}
+                    className="text-right tabular-nums"
+                    {...register(`parcels.${i}.area`)}
+                  />
+                </TD>
+                <TD numeric className="min-w-[7rem]">
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    aria-label={`${i + 1}行目 転用面積`}
+                    className="text-right tabular-nums"
+                    {...register(`parcels.${i}.tenyo_area`)}
+                  />
+                </TD>
+                <TD className="min-w-[8rem]">
+                  <Input
+                    aria-label={`${i + 1}行目 備考`}
+                    {...register(`parcels.${i}.memo`)}
+                  />
+                </TD>
+                <TD>
+                  <Button
+                    type="button"
+                    variant="text"
+                    size="sm"
+                    aria-label={`${i + 1}行目を削除する`}
+                    onClick={() => remove(i)}
+                    disabled={pending || fields.length <= 1}
+                    className="text-danger hover:no-underline disabled:text-text-disabled"
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                  </Button>
+                </TD>
+              </TR>
+            ))}
+          </TBody>
+          <tfoot className="border-t border-border bg-head">
+            <tr>
+              <TD className="font-semibold text-text-grey" colSpan={7}>
+                合計（{fields.length} 筆）
+              </TD>
+              <TD numeric className="font-bold text-text-black">
+                {formatArea(totalArea)}
+              </TD>
+              <TD numeric className="font-bold text-text-black">
+                {formatArea(totalTenyo)}
+              </TD>
+              <TD colSpan={2} />
+            </tr>
+          </tfoot>
+        </Table>
+      </div>
 
       <div>
         <Button
@@ -187,34 +263,16 @@ export function CaseParcelsTab({
           onClick={() => append(emptyRow(fields.length))}
           disabled={pending}
         >
+          <Plus className="h-4 w-4" aria-hidden="true" />
           筆を追加
         </Button>
       </div>
 
-      <Card>
-        <CardBody className="flex flex-wrap items-center justify-between gap-m">
-          <div className="text-s text-text-grey">
-            合計地積:{" "}
-            <span className="font-medium text-text-black">{totalArea.toLocaleString()} ㎡</span>
-            <span className="ml-m">
-              合計転用面積:{" "}
-              <span className="font-medium text-text-black">{totalTenyo.toLocaleString()} ㎡</span>
-            </span>
-          </div>
-          <div className="flex items-center gap-s">
-            {saved && <span className="text-s text-success">保存しました。</span>}
-            <Button type="submit" disabled={pending}>
-              {pending ? "保存中…" : "保存する"}
-            </Button>
-          </div>
-        </CardBody>
-      </Card>
-
-      {error && (
-        <p className="text-s text-danger" role="alert">
-          {error}
-        </p>
-      )}
+      <SaveBar info={<>未保存の変更は保存するまで反映されません。</>}>
+        <Button type="submit" loading={pending} loadingLabel="保存中…">
+          保存する
+        </Button>
+      </SaveBar>
     </form>
   );
 }

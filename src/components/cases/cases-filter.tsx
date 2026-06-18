@@ -1,10 +1,11 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   CASE_TYPES,
   CASE_STATUSES,
@@ -13,142 +14,182 @@ import {
 } from "@/lib/validators/case";
 import type { AssignableUser } from "@/server/cases";
 
-type Props = {
-  defaultQ?: string;
-  defaultType?: string;
-  defaultStatus?: string;
-  defaultUser?: string;
-  defaultDeadlineFrom?: string;
-  defaultDeadlineTo?: string;
-  defaultOverdue?: boolean;
-  users: AssignableUser[];
-};
-
-export function CasesFilter({
-  defaultQ,
-  defaultType,
-  defaultStatus,
-  defaultUser,
-  defaultDeadlineFrom,
-  defaultDeadlineTo,
-  defaultOverdue,
-  users,
-}: Props) {
+/*
+ * 案件一覧の常設フィルタバー。選択は即時反映（URLクエリを更新）し、
+ * 適用中フィルタをチップで可視化する。see: DESIGN.md §8.8
+ */
+export function CasesFilter({ users }: { users: AssignableUser[] }) {
   const router = useRouter();
+  const pathname = usePathname();
   const sp = useSearchParams();
-  const [q, setQ] = useState(defaultQ ?? "");
-  const [type, setType] = useState(defaultType ?? "");
-  const [status, setStatus] = useState(defaultStatus ?? "");
-  const [user, setUser] = useState(defaultUser ?? "");
-  const [deadlineFrom, setDeadlineFrom] = useState(defaultDeadlineFrom ?? "");
-  const [deadlineTo, setDeadlineTo] = useState(defaultDeadlineTo ?? "");
-  const [overdue, setOverdue] = useState(!!defaultOverdue);
 
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const [q, setQ] = useState(sp.get("q") ?? "");
+  const firstRender = useRef(true);
+
+  const pushWith = (mutate: (params: URLSearchParams) => void) => {
     const params = new URLSearchParams(sp.toString());
-    if (q) params.set("q", q);
-    else params.delete("q");
-    if (type) params.set("type", type);
-    else params.delete("type");
-    if (status) params.set("status", status);
-    else params.delete("status");
-    if (user) params.set("user", user);
-    else params.delete("user");
-    if (deadlineFrom) params.set("deadline_from", deadlineFrom);
-    else params.delete("deadline_from");
-    if (deadlineTo) params.set("deadline_to", deadlineTo);
-    else params.delete("deadline_to");
-    if (overdue) params.set("overdue", "1");
-    else params.delete("overdue");
+    mutate(params);
     params.delete("page");
-    router.push(`/cases?${params.toString()}`);
+    const qs = params.toString();
+    router.push(qs ? `${pathname}?${qs}` : pathname);
   };
 
-  const reset = () => {
+  const setParam = (key: string, value: string) =>
+    pushWith((params) => (value ? params.set(key, value) : params.delete(key)));
+
+  // キーワードはデバウンス（300ms）後に反映
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    const handle = setTimeout(() => {
+      const current = sp.get("q") ?? "";
+      const next = q.trim();
+      if (next === current) return;
+      pushWith((params) => (next ? params.set("q", next) : params.delete("q")));
+    }, 300);
+    return () => clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q, sp, pathname, router]);
+
+  const userName = (id: string) => {
+    const u = users.find((user) => user.id === id);
+    return u?.full_name ?? u?.email ?? id;
+  };
+
+  const chips: { key: string; label: string; onRemove: () => void }[] = [];
+  const addChip = (key: string, label: string, onRemove?: () => void) =>
+    chips.push({ key, label, onRemove: onRemove ?? (() => setParam(key, "")) });
+
+  if (sp.get("q"))
+    addChip("q", `キーワード: ${sp.get("q")}`, () => {
+      setQ("");
+      setParam("q", "");
+    });
+  if (sp.get("type"))
+    addChip("type", `種別: ${CaseTypeLabels[sp.get("type") as keyof typeof CaseTypeLabels] ?? sp.get("type")}`);
+  if (sp.get("status"))
+    addChip(
+      "status",
+      `ステータス: ${CaseStatusLabels[sp.get("status") as keyof typeof CaseStatusLabels] ?? sp.get("status")}`,
+    );
+  if (sp.get("user")) addChip("user", `担当者: ${userName(sp.get("user") as string)}`);
+  if (sp.get("deadline_from")) addChip("deadline_from", `締切 ${sp.get("deadline_from")} から`);
+  if (sp.get("deadline_to")) addChip("deadline_to", `締切 ${sp.get("deadline_to")} まで`);
+  if (sp.get("overdue") === "1") addChip("overdue", "期限超過のみ");
+
+  const clearAll = () => {
     setQ("");
-    setType("");
-    setStatus("");
-    setUser("");
-    setDeadlineFrom("");
-    setDeadlineTo("");
-    setOverdue(false);
-    router.push("/cases");
+    router.push(pathname);
   };
 
   return (
-    <form onSubmit={submit} className="flex flex-wrap items-end gap-s p-m">
-      <div className="flex min-w-[220px] flex-1 flex-col gap-xs">
-        <label className="text-s font-medium">キーワード</label>
-        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="案件番号・案件名" />
+    <div className="flex flex-col gap-s p-m">
+      <div className="flex flex-wrap items-end gap-s">
+        <label className="flex min-w-[220px] flex-1 flex-col gap-xs">
+          <span className="text-s font-medium text-text-grey">キーワード</span>
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="案件番号・案件名" />
+        </label>
+        <label className="flex flex-col gap-xs">
+          <span className="text-s font-medium text-text-grey">種別</span>
+          <Select
+            value={sp.get("type") ?? ""}
+            onChange={(e) => setParam("type", e.target.value)}
+            className="w-[160px]"
+          >
+            <option value="">すべて</option>
+            {CASE_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {CaseTypeLabels[t]}
+              </option>
+            ))}
+          </Select>
+        </label>
+        <label className="flex flex-col gap-xs">
+          <span className="text-s font-medium text-text-grey">ステータス</span>
+          <Select
+            value={sp.get("status") ?? ""}
+            onChange={(e) => setParam("status", e.target.value)}
+            className="w-[130px]"
+          >
+            <option value="">すべて</option>
+            {CASE_STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {CaseStatusLabels[s]}
+              </option>
+            ))}
+          </Select>
+        </label>
+        <label className="flex flex-col gap-xs">
+          <span className="text-s font-medium text-text-grey">担当者</span>
+          <Select
+            value={sp.get("user") ?? ""}
+            onChange={(e) => setParam("user", e.target.value)}
+            className="w-[150px]"
+          >
+            <option value="">すべて</option>
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.full_name ?? u.email}
+              </option>
+            ))}
+          </Select>
+        </label>
+        <label className="flex flex-col gap-xs">
+          <span className="text-s font-medium text-text-grey">締切（開始）</span>
+          <Input
+            type="date"
+            value={sp.get("deadline_from") ?? ""}
+            onChange={(e) => setParam("deadline_from", e.target.value)}
+            className="w-[150px]"
+          />
+        </label>
+        <label className="flex flex-col gap-xs">
+          <span className="text-s font-medium text-text-grey">締切（終了）</span>
+          <Input
+            type="date"
+            value={sp.get("deadline_to") ?? ""}
+            onChange={(e) => setParam("deadline_to", e.target.value)}
+            className="w-[150px]"
+          />
+        </label>
+        <label className="flex h-8 items-center gap-xs text-s text-text-black">
+          <Checkbox
+            checked={sp.get("overdue") === "1"}
+            onChange={(e) => setParam("overdue", e.target.checked ? "1" : "")}
+          />
+          期限超過のみ
+        </label>
       </div>
-      <div className="flex flex-col gap-xs">
-        <label className="text-s font-medium">種別</label>
-        <Select value={type} onChange={(e) => setType(e.target.value)} className="w-[160px]">
-          <option value="">すべて</option>
-          {CASE_TYPES.map((t) => (
-            <option key={t} value={t}>
-              {CaseTypeLabels[t]}
-            </option>
+
+      {chips.length > 0 && (
+        <div className="flex flex-wrap items-center gap-xs">
+          {chips.map((chip) => (
+            <span
+              key={chip.key}
+              className="inline-flex items-center gap-xxs rounded-s bg-grey-7 py-xxs pl-s pr-xxs text-xs text-text-grey"
+            >
+              {chip.label}
+              <button
+                type="button"
+                onClick={chip.onRemove}
+                aria-label={`${chip.label} を解除`}
+                className="flex h-4 w-4 items-center justify-center rounded-s text-text-quaternary hover:bg-grey-20 hover:text-text-black"
+              >
+                <X className="h-3 w-3" aria-hidden="true" />
+              </button>
+            </span>
           ))}
-        </Select>
-      </div>
-      <div className="flex flex-col gap-xs">
-        <label className="text-s font-medium">ステータス</label>
-        <Select value={status} onChange={(e) => setStatus(e.target.value)} className="w-[130px]">
-          <option value="">すべて</option>
-          {CASE_STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {CaseStatusLabels[s]}
-            </option>
-          ))}
-        </Select>
-      </div>
-      <div className="flex flex-col gap-xs">
-        <label className="text-s font-medium">担当者</label>
-        <Select value={user} onChange={(e) => setUser(e.target.value)} className="w-[140px]">
-          <option value="">すべて</option>
-          {users.map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.full_name ?? u.email}
-            </option>
-          ))}
-        </Select>
-      </div>
-      <div className="flex flex-col gap-xs">
-        <label className="text-s font-medium">締切日（開始）</label>
-        <Input
-          type="date"
-          value={deadlineFrom}
-          onChange={(e) => setDeadlineFrom(e.target.value)}
-          className="w-[140px]"
-        />
-      </div>
-      <div className="flex flex-col gap-xs">
-        <label className="text-s font-medium">締切日（終了）</label>
-        <Input
-          type="date"
-          value={deadlineTo}
-          onChange={(e) => setDeadlineTo(e.target.value)}
-          className="w-[140px]"
-        />
-      </div>
-      <label className="flex items-center gap-xs text-s">
-        <input
-          type="checkbox"
-          checked={overdue}
-          onChange={(e) => setOverdue(e.target.checked)}
-        />
-        期限超過のみ
-      </label>
-      <div className="flex gap-xs">
-        <Button type="submit" variant="secondary">
-          絞り込む
-        </Button>
-        <Button type="button" variant="text" onClick={reset}>
-          リセット
-        </Button>
-      </div>
-    </form>
+          <button
+            type="button"
+            onClick={clearAll}
+            className="ml-xs text-xs text-text-link hover:underline"
+          >
+            すべて解除
+          </button>
+        </div>
+      )}
+    </div>
   );
 }

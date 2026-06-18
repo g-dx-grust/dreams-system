@@ -347,6 +347,37 @@ export async function generateCaseDocuments(
   });
 }
 
+/*
+ * 案件一覧からの一括帳票生成。選択した各案件について、その案件種別に適用される
+ * 帳票をまとめて生成する（案件ごとに generateCaseDocuments を実行）。
+ */
+export async function bulkGenerateForCases(
+  caseIds: number[],
+  highlight = true,
+): Promise<ActionResult<{ casesSucceeded: number; casesFailed: number; totalDocuments: number }>> {
+  await requireUser();
+  const targetIds = (caseIds ?? []).filter((v) => Number.isInteger(v) && v > 0);
+  if (targetIds.length === 0) return fail("対象の案件が選択されていません。");
+
+  let casesSucceeded = 0;
+  let casesFailed = 0;
+  let totalDocuments = 0;
+  for (const caseId of targetIds) {
+    const result = await generateCaseDocuments({ caseId, highlight });
+    if (result.ok) {
+      casesSucceeded += 1;
+      totalDocuments += result.data.generated.length;
+    } else {
+      casesFailed += 1;
+    }
+  }
+
+  if (casesSucceeded === 0) {
+    return fail("選択した案件で生成できる帳票がありませんでした。");
+  }
+  return ok({ casesSucceeded, casesFailed, totalDocuments });
+}
+
 function isStorageConflict(error: { message?: string; statusCode?: number | string }) {
   const message = error.message?.toLowerCase() ?? "";
   return (
@@ -393,12 +424,60 @@ async function nextDocumentVersion(
 
 // ---- 帳票履歴一覧 ----
 
+export type DocumentFileType = "docx" | "xlsx";
+
+export type DocumentSortColumn = "created_at" | "version" | "file_name" | "case_number";
+
 export type ListDocumentsParams = {
   caseId?: number;
+  caseNumber?: string;
   templateId?: number;
+  fileType?: DocumentFileType;
+  q?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  sort?: string;
+  order?: string;
   page?: number;
   perPage?: number;
 };
+
+// PostgREST の or フィルタで使う値をエスケープする（"," や "(" を含む入力対策）。
+function escapeFilterValue(value: string): string {
+  return value.replace(/([(),."\\])/g, "\\$1");
+}
+
+export type DocumentTemplateOption = {
+  id: number;
+  name: string;
+};
+
+// 並べ替え可能なカラムの whitelist（インジェクション防止）。
+// see: DESIGN.md §8.4「帳票履歴=生成日時の降順」を既定にする。
+function resolveDocumentSort(
+  sort: string | undefined,
+  order: string | undefined,
+): {
+  column: DocumentSortColumn;
+  ascending: boolean;
+  // 結合テーブルのカラムでソートする場合に参照名を返す
+  referencedTable?: string;
+} {
+  const ascending = order === "asc";
+  switch (sort) {
+    case "version":
+      return { column: "version", ascending };
+    case "file_name":
+      return { column: "file_name", ascending };
+    case "case_number":
+      return { column: "case_number", ascending, referencedTable: "cases" };
+    case "created_at":
+      return { column: "created_at", ascending };
+    default:
+      // 未指定時は既定順（生成日時の降順）を維持する。
+      return { column: "created_at", ascending: false };
+  }
+}
 
 export async function listDocuments(params: ListDocumentsParams = {}): Promise<
   ActionResult<{
@@ -422,10 +501,34 @@ export async function listDocuments(params: ListDocumentsParams = {}): Promise<
     );
   if (params.caseId) q = q.eq("case_id", params.caseId);
   if (params.templateId) q = q.eq("template_id", params.templateId);
+  if (params.fileType === "docx" || params.fileType === "xlsx") {
+    q = q.eq("file_type", params.fileType);
+  }
+  const caseNumber = params.caseNumber?.trim();
+  if (caseNumber) {
+    q = q.ilike("cases.case_number", `%${escapeFilterValue(caseNumber)}%`);
+  }
+  const keyword = params.q?.trim();
+  if (keyword) {
+    // ファイル名（テンプレート名・案件番号・版を含む命名規則）の部分一致で絞り込む。
+    q = q.ilike("file_name", `%${escapeFilterValue(keyword)}%`);
+  }
+  if (params.dateFrom) q = q.gte("created_at", params.dateFrom);
+  if (params.dateTo) {
+    // 期間（終了）は日付の終端まで含める（その日の 23:59:59 まで）。
+    q = q.lt("created_at", `${params.dateTo}T23:59:59.999`);
+  }
 
-  const { data, count, error } = await q
-    .order("created_at", { ascending: false })
-    .range((page - 1) * perPage, page * perPage - 1);
+  const sort = resolveDocumentSort(params.sort, params.order);
+  q = sort.referencedTable
+    ? q.order(sort.column, { ascending: sort.ascending, referencedTable: sort.referencedTable })
+    : q.order(sort.column, { ascending: sort.ascending });
+  // 同一ソートキー内の表示順を安定させる。
+  if (sort.column !== "created_at") {
+    q = q.order("created_at", { ascending: false });
+  }
+
+  const { data, count, error } = await q.range((page - 1) * perPage, page * perPage - 1);
 
   if (error) return fail("帳票履歴の取得に失敗しました。");
 
@@ -436,6 +539,38 @@ export async function listDocuments(params: ListDocumentsParams = {}): Promise<
   }));
 
   return ok({ items, total: count ?? 0, page, perPage });
+}
+
+/*
+ * 帳票履歴フィルタのテンプレート絞り込み用に、履歴で実際に使われている
+ * テンプレートのみを返す（生成実績のないテンプレートは候補に出さない）。
+ */
+export async function listDocumentTemplateOptions(): Promise<
+  ActionResult<DocumentTemplateOption[]>
+> {
+  await requireUser();
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("document_histories")
+    .select("template_id, templates!inner(name)")
+    .order("template_id", { ascending: true });
+
+  if (error) return fail("テンプレート候補の取得に失敗しました。");
+
+  const seen = new Map<number, string>();
+  for (const row of data ?? []) {
+    const templateId = (row as { template_id: number }).template_id;
+    if (seen.has(templateId)) continue;
+    const name = (row.templates as unknown as { name: string } | null)?.name ?? "";
+    seen.set(templateId, name);
+  }
+
+  const options = [...seen.entries()]
+    .map(([id, name]) => ({ id, name }))
+    .sort((a, b) => a.name.localeCompare(b.name, "ja"));
+
+  return ok(options);
 }
 
 // ---- 帳票履歴詳細 ----

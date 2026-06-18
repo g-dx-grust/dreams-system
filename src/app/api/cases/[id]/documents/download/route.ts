@@ -2,6 +2,11 @@ import JSZip from "jszip";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/permissions";
+import {
+  buildParcelAttachmentFileName,
+  buildParcelAttachmentXlsx,
+  type ParcelAttachmentRow,
+} from "@/lib/transfer/parcel-attachment";
 
 export const runtime = "nodejs";
 
@@ -23,10 +28,11 @@ export async function GET(
   if (documentIds.length === 0) {
     return new NextResponse("Bad Request", { status: 400 });
   }
+  const includeParcelAttachment = url.searchParams.get("besshi") === "1";
 
   const supabase = await createClient();
   const [{ data: caseRow }, { data: histories, error }] = await Promise.all([
-    supabase.from("cases").select("case_number").eq("id", caseId).single(),
+    supabase.from("cases").select("case_number, case_name").eq("id", caseId).single(),
     supabase
       .from("document_histories")
       .select("id, case_id, file_name, file_path")
@@ -50,6 +56,27 @@ export async function GET(
 
     const buffer = Buffer.from(await blob.arrayBuffer());
     zip.file(uniqueFileName(history.file_name, usedNames), buffer);
+  }
+
+  if (includeParcelAttachment) {
+    const { data: parcels } = await supabase
+      .from("case_parcels")
+      .select("sort_order, pref, city, oaza, aza, chiban, chimoku, area, tenyo_area, memo")
+      .eq("case_id", caseId)
+      .order("sort_order", { ascending: true });
+    if (parcels && parcels.length > 0) {
+      const attachment = await buildParcelAttachmentXlsx(
+        {
+          case_number: caseRow?.case_number ?? `case-${caseId}`,
+          case_name: caseRow?.case_name ?? null,
+        },
+        parcels as ParcelAttachmentRow[],
+      );
+      const attachmentName = buildParcelAttachmentFileName(
+        caseRow?.case_number ?? `case-${caseId}`,
+      );
+      zip.file(uniqueFileName(attachmentName, usedNames), attachment);
+    }
   }
 
   const fileCount = Object.keys(zip.files).length;

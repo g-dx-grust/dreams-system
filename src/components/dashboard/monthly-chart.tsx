@@ -1,5 +1,3 @@
-"use client";
-
 import { Card, CardHeader, CardTitle, CardBody } from "@/components/ui/card";
 
 type MonthlyRow = {
@@ -14,12 +12,19 @@ const CHART_1 = "var(--color-chart-1)";
 const CHART_2 = "var(--color-chart-2)";
 const CHART_3 = "var(--color-chart-3)";
 const CHART_8 = "var(--color-chart-8)";
+const GRID = "var(--color-border)";
+const AXIS_TEXT = "var(--color-text-grey)";
 
+// SVG 座標系の単位（CSS px ではなくビューポート内の論理単位）。see: DESIGN.md §8.4
 const BAR_W = 48;
 const BAR_GAP = 4;
 const GROUP_W = BAR_W * 2 + BAR_GAP + 16;
 const CHART_H = 160;
-const PADDING = { top: 16, right: 16, bottom: 32, left: 48 };
+const PAD = { top: 16, right: 16, bottom: 32, left: 48 };
+const AXIS_FONT = 10;
+const DOT_R = 3;
+
+const GRID_RATIOS = [0, 0.25, 0.5, 0.75, 1] as const;
 
 export function MonthlyChart({ rows }: { rows: MonthlyRow[] }) {
   if (rows.length === 0) {
@@ -46,7 +51,7 @@ export function MonthlyChart({ rows }: { rows: MonthlyRow[] }) {
         <CardTitle>月次推移（過去12ヶ月）</CardTitle>
       </CardHeader>
       <CardBody>
-        <div className="space-y-[var(--space-l)]">
+        <div className="space-y-l">
           <CaseCountChart rows={rows} labels={labels} />
           <AmountChart rows={rows} labels={labels} />
         </div>
@@ -61,54 +66,78 @@ export function MonthlyChart({ rows }: { rows: MonthlyRow[] }) {
   );
 }
 
+function summarize(values: number[], unit: string, formatter: (n: number) => string): string {
+  const total = values.reduce((sum, v) => sum + v, 0);
+  const max = Math.max(...values, 0);
+  return `合計 ${formatter(total)}${unit}、最大 ${formatter(max)}${unit}`;
+}
+
 function CaseCountChart({ rows, labels }: { rows: MonthlyRow[]; labels: string[] }) {
   const maxVal = Math.max(...rows.flatMap((r) => [r.new_cases, r.completed_cases]), 1);
-  const totalW = GROUP_W * rows.length + PADDING.left + PADDING.right;
-  const totalH = CHART_H + PADDING.top + PADDING.bottom;
-  const innerH = CHART_H;
-  const scaleY = (v: number) => innerH - (v / maxVal) * innerH;
+  const innerW = GROUP_W * rows.length;
+  const totalW = innerW + PAD.left + PAD.right;
+  const totalH = CHART_H + PAD.top + PAD.bottom;
+  const scaleY = (v: number) => CHART_H - (v / maxVal) * CHART_H;
+
+  const ariaLabel =
+    `月次の新規案件数と完了案件数の棒グラフ。新規は${summarize(rows.map((r) => r.new_cases), "件", (n) => n.toLocaleString("ja-JP"))}、` +
+    `完了は${summarize(rows.map((r) => r.completed_cases), "件", (n) => n.toLocaleString("ja-JP"))}。`;
 
   return (
     <div>
       <p className="mb-xs text-xs text-text-grey">件数</p>
       <div className="overflow-x-auto">
-        <svg width={totalW} height={totalH} className="text-xs">
-          <g transform={`translate(${PADDING.left},${PADDING.top})`}>
-            {/* Y grid lines */}
-            {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
-              const y = innerH - ratio * innerH;
+        <svg
+          width={totalW}
+          height={totalH}
+          role="img"
+          aria-label={ariaLabel}
+          className="text-xs"
+        >
+          <g transform={`translate(${PAD.left},${PAD.top})`}>
+            {GRID_RATIOS.map((ratio) => {
+              const y = CHART_H - ratio * CHART_H;
               const val = Math.round(maxVal * ratio);
               return (
                 <g key={ratio}>
-                  <line x1={0} y1={y} x2={totalW - PADDING.left - PADDING.right} y2={y}
-                    stroke="var(--color-border)" strokeWidth={1} />
-                  <text x={-6} y={y + 4} textAnchor="end" fontSize={10} fill="var(--color-text-grey)">
+                  <line x1={0} y1={y} x2={innerW} y2={y} stroke={GRID} strokeWidth={1} />
+                  <text x={-6} y={y + 4} textAnchor="end" fontSize={AXIS_FONT} fill={AXIS_TEXT}>
                     {val}
                   </text>
                 </g>
               );
             })}
-            {/* Bars */}
             {rows.map((row, i) => {
               const x = i * GROUP_W;
-              const newH = (row.new_cases / maxVal) * innerH;
-              const compH = (row.completed_cases / maxVal) * innerH;
+              const newH = (row.new_cases / maxVal) * CHART_H;
+              const compH = (row.completed_cases / maxVal) * CHART_H;
               return (
                 <g key={row.year_month}>
-                  <rect x={x} y={scaleY(row.new_cases)} width={BAR_W} height={newH}
-                    fill={CHART_1} opacity={0.85} />
-                  <rect x={x + BAR_W + BAR_GAP} y={scaleY(row.completed_cases)} width={BAR_W} height={compH}
-                    fill={CHART_8} opacity={0.85} />
-                  <text x={x + BAR_W + BAR_GAP / 2} y={innerH + 18} textAnchor="middle"
-                    fontSize={10} fill="var(--color-text-grey)">
+                  <rect x={x} y={scaleY(row.new_cases)} width={BAR_W} height={newH} fill={CHART_1}>
+                    <title>{`${labels[i]} 新規 ${row.new_cases.toLocaleString("ja-JP")}件`}</title>
+                  </rect>
+                  <rect
+                    x={x + BAR_W + BAR_GAP}
+                    y={scaleY(row.completed_cases)}
+                    width={BAR_W}
+                    height={compH}
+                    fill={CHART_8}
+                  >
+                    <title>{`${labels[i]} 完了 ${row.completed_cases.toLocaleString("ja-JP")}件`}</title>
+                  </rect>
+                  <text
+                    x={x + BAR_W + BAR_GAP / 2}
+                    y={CHART_H + 18}
+                    textAnchor="middle"
+                    fontSize={AXIS_FONT}
+                    fill={AXIS_TEXT}
+                  >
                     {labels[i]}
                   </text>
                 </g>
               );
             })}
-            {/* X axis */}
-            <line x1={0} y1={innerH} x2={totalW - PADDING.left - PADDING.right} y2={innerH}
-              stroke="var(--color-border)" strokeWidth={1} />
+            <line x1={0} y1={CHART_H} x2={innerW} y2={CHART_H} stroke={GRID} strokeWidth={1} />
           </g>
         </svg>
       </div>
@@ -118,57 +147,75 @@ function CaseCountChart({ rows, labels }: { rows: MonthlyRow[]; labels: string[]
 
 function AmountChart({ rows, labels }: { rows: MonthlyRow[]; labels: string[] }) {
   const maxVal = Math.max(...rows.flatMap((r) => [r.invoice_amount, r.paid_amount]), 1);
-  const totalW = GROUP_W * rows.length + PADDING.left + PADDING.right;
-  const totalH = CHART_H + PADDING.top + PADDING.bottom;
-  const innerH = CHART_H;
-  const scaleY = (v: number) => innerH - (v / maxVal) * innerH;
+  const innerW = GROUP_W * rows.length;
+  const totalW = innerW + PAD.left + PAD.right;
+  const totalH = CHART_H + PAD.top + PAD.bottom;
+  const scaleY = (v: number) => CHART_H - (v / maxVal) * CHART_H;
+  const cx = (i: number) => i * GROUP_W + BAR_W;
 
-  const pointsOf = (arr: number[]) =>
-    arr
-      .map((v, i) => `${i * GROUP_W + BAR_W},${scaleY(v)}`)
-      .join(" ");
+  const pointsOf = (arr: number[]) => arr.map((v, i) => `${cx(i)},${scaleY(v)}`).join(" ");
+
+  const ariaLabel =
+    `月次の請求額と入金額の折れ線グラフ。請求額は${summarize(rows.map((r) => r.invoice_amount), "円", formatYenAxis)}、` +
+    `入金額は${summarize(rows.map((r) => r.paid_amount), "円", formatYenAxis)}。`;
 
   return (
     <div>
       <p className="mb-xs text-xs text-text-grey">金額（円）</p>
       <div className="overflow-x-auto">
-        <svg width={totalW} height={totalH} className="text-xs">
-          <g transform={`translate(${PADDING.left},${PADDING.top})`}>
-            {/* Y grid lines */}
-            {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
-              const y = innerH - ratio * innerH;
+        <svg
+          width={totalW}
+          height={totalH}
+          role="img"
+          aria-label={ariaLabel}
+          className="text-xs"
+        >
+          <g transform={`translate(${PAD.left},${PAD.top})`}>
+            {GRID_RATIOS.map((ratio) => {
+              const y = CHART_H - ratio * CHART_H;
               const val = Math.round(maxVal * ratio);
               return (
                 <g key={ratio}>
-                  <line x1={0} y1={y} x2={totalW - PADDING.left - PADDING.right} y2={y}
-                    stroke="var(--color-border)" strokeWidth={1} />
-                  <text x={-6} y={y + 4} textAnchor="end" fontSize={10} fill="var(--color-text-grey)">
-                    {val >= 10000 ? `${Math.floor(val / 10000)}万` : String(val)}
+                  <line x1={0} y1={y} x2={innerW} y2={y} stroke={GRID} strokeWidth={1} />
+                  <text x={-6} y={y + 4} textAnchor="end" fontSize={AXIS_FONT} fill={AXIS_TEXT}>
+                    {formatYenAxis(val)}
                   </text>
                 </g>
               );
             })}
-            {/* Lines */}
             <polyline
               points={pointsOf(rows.map((r) => r.invoice_amount))}
-              fill="none" stroke={CHART_2} strokeWidth={2} />
+              fill="none"
+              stroke={CHART_2}
+              strokeWidth={2}
+            />
             <polyline
               points={pointsOf(rows.map((r) => r.paid_amount))}
-              fill="none" stroke={CHART_3} strokeWidth={2} strokeDasharray="4 2" />
-            {/* Dots */}
+              fill="none"
+              stroke={CHART_3}
+              strokeWidth={2}
+              strokeDasharray="4 2"
+            />
             {rows.map((row, i) => (
               <g key={row.year_month}>
-                <circle cx={i * GROUP_W + BAR_W} cy={scaleY(row.invoice_amount)} r={3} fill={CHART_2} />
-                <circle cx={i * GROUP_W + BAR_W} cy={scaleY(row.paid_amount)} r={3} fill={CHART_3} />
-                <text x={i * GROUP_W + BAR_W} y={innerH + 18} textAnchor="middle"
-                  fontSize={10} fill="var(--color-text-grey)">
+                <circle cx={cx(i)} cy={scaleY(row.invoice_amount)} r={DOT_R} fill={CHART_2}>
+                  <title>{`${labels[i]} 請求額 ${row.invoice_amount.toLocaleString("ja-JP")}円`}</title>
+                </circle>
+                <circle cx={cx(i)} cy={scaleY(row.paid_amount)} r={DOT_R} fill={CHART_3}>
+                  <title>{`${labels[i]} 入金額 ${row.paid_amount.toLocaleString("ja-JP")}円`}</title>
+                </circle>
+                <text
+                  x={cx(i)}
+                  y={CHART_H + 18}
+                  textAnchor="middle"
+                  fontSize={AXIS_FONT}
+                  fill={AXIS_TEXT}
+                >
                   {labels[i]}
                 </text>
               </g>
             ))}
-            {/* X axis */}
-            <line x1={0} y1={innerH} x2={totalW - PADDING.left - PADDING.right} y2={innerH}
-              stroke="var(--color-border)" strokeWidth={1} />
+            <line x1={0} y1={CHART_H} x2={innerW} y2={CHART_H} stroke={GRID} strokeWidth={1} />
           </g>
         </svg>
       </div>
@@ -176,14 +223,18 @@ function AmountChart({ rows, labels }: { rows: MonthlyRow[]; labels: string[] })
   );
 }
 
+function formatYenAxis(val: number): string {
+  return val >= 10000 ? `${Math.floor(val / 10000)}万` : String(val);
+}
+
 function LegendItem({ color, label, dashed }: { color: string; label: string; dashed?: boolean }) {
   return (
     <span className="flex items-center gap-xs">
-      <svg width={20} height={10}>
+      <svg width={20} height={10} aria-hidden="true">
         {dashed ? (
           <line x1={0} y1={5} x2={20} y2={5} stroke={color} strokeWidth={2} strokeDasharray="4 2" />
         ) : (
-          <rect x={0} y={1} width={20} height={8} fill={color} opacity={0.85} />
+          <rect x={0} y={1} width={20} height={8} fill={color} />
         )}
       </svg>
       {label}

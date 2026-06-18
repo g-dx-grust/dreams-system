@@ -3,11 +3,14 @@
 import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
-import { Card, CardBody } from "@/components/ui/card";
+import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Field } from "@/components/ui/field";
+import { SaveBar } from "@/components/ui/save-bar";
+import { useToast } from "@/components/ui/toast";
+import { cn } from "@/lib/cn";
 import { formatJPY } from "@/lib/format";
 import { updateCaseFinancial } from "@/server/cases";
 import type { CaseFinancialRow } from "@/server/cases";
@@ -28,11 +31,16 @@ export function CaseFinancialTab({
   caseId: number;
   financial: CaseFinancialRow | null;
 }) {
+  const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
 
-  const { register, handleSubmit, watch } = useForm<FormValues>({
+  const {
+    register,
+    handleSubmit,
+    watch,
+    formState: { isDirty },
+  } = useForm<FormValues>({
     defaultValues: {
       estimate_amount: financial?.estimate_amount != null ? String(financial.estimate_amount) : "",
       invoice_amount: financial?.invoice_amount != null ? String(financial.invoice_amount) : "",
@@ -54,7 +62,6 @@ export function CaseFinancialTab({
 
   const onSubmit = (values: FormValues) => {
     setError(null);
-    setSaved(false);
     startTransition(async () => {
       const res = await updateCaseFinancial(caseId, {
         estimate_amount: values.estimate_amount === "" ? null : Number(values.estimate_amount),
@@ -68,16 +75,17 @@ export function CaseFinancialTab({
         setError(res.error);
         return;
       }
-      setSaved(true);
+      toast({ message: "金額情報を保存しました", tone: "success" });
     });
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-l">
+    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-m">
       <Card>
+        <CardHeader>
+          <CardTitle>金額情報</CardTitle>
+        </CardHeader>
         <CardBody className="flex flex-col gap-m">
-          <h2 className="text-l font-medium">金額情報</h2>
-
           <div className="grid grid-cols-1 gap-m sm:grid-cols-2">
             <Field label="見積金額（税抜）">
               <Input type="number" min="0" {...register("estimate_amount")} />
@@ -91,8 +99,8 @@ export function CaseFinancialTab({
             </Field>
           </div>
 
-          <div className="rounded-m bg-over-background px-m py-s text-s">
-            見積金額（税込）: <span className="font-medium">{formatJPY(estimateIncl)}</span>
+          <div className="rounded-s bg-over-background px-m py-s text-s">
+            見積金額（税込）: <span className="font-semibold tabular-nums">{formatJPY(estimateIncl)}</span>
           </div>
 
           <div className="grid grid-cols-1 gap-m sm:grid-cols-2">
@@ -105,17 +113,16 @@ export function CaseFinancialTab({
           </div>
 
           <div className="grid grid-cols-1 gap-m sm:grid-cols-2">
-            <div className="rounded-m bg-over-background px-m py-s text-s">
-              請求金額（税込）: <span className="font-medium">{formatJPY(invoiceIncl)}</span>
+            <div className="rounded-s bg-over-background px-m py-s text-s">
+              請求金額（税込）: <span className="font-semibold tabular-nums">{formatJPY(invoiceIncl)}</span>
             </div>
             <div
-              className={
-                unpaid > 0
-                  ? "rounded-m bg-[rgba(224,30,90,0.08)] px-m py-s text-s text-danger"
-                  : "rounded-m bg-over-background px-m py-s text-s"
-              }
+              className={cn(
+                "rounded-s px-m py-s text-s",
+                unpaid > 0 ? "bg-danger-soft text-danger" : "bg-over-background",
+              )}
             >
-              未収金: <span className="font-medium">{formatJPY(unpaid)}</span>
+              未収金: <span className="font-semibold tabular-nums">{formatJPY(unpaid)}</span>
             </div>
           </div>
 
@@ -130,17 +137,19 @@ export function CaseFinancialTab({
       </Card>
 
       {error && (
-        <p className="text-s text-danger" role="alert">
+        <div
+          className="rounded-s border border-danger bg-danger-soft p-s text-s text-danger"
+          role="alert"
+        >
           {error}
-        </p>
+        </div>
       )}
 
-      <div className="flex items-center justify-end gap-s">
-        {saved && <span className="text-s text-success">保存しました。</span>}
-        <Button type="submit" disabled={pending}>
-          {pending ? "保存中…" : "保存する"}
+      <SaveBar info={isDirty ? <>未保存の変更があります</> : null}>
+        <Button type="submit" loading={pending} loadingLabel="保存中…">
+          保存する
         </Button>
-      </div>
+      </SaveBar>
     </form>
   );
 }

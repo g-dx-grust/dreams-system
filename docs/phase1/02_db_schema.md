@@ -137,6 +137,10 @@ CREATE TABLE cases (
     submission_target   VARCHAR(200),  -- 提出先
     submission_date     DATE,          -- 提出日
     deadline_date       DATE,          -- 締切日
+    latitude            DOUBLE PRECISION,
+                        -- 案件ピン緯度（世界測地系 JGD2011/WGS84 相当、任意）
+    longitude           DOUBLE PRECISION,
+                        -- 案件ピン経度（世界測地系 JGD2011/WGS84 相当、任意）
     memo                TEXT,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -147,7 +151,11 @@ CREATE INDEX idx_cases_case_type ON cases(case_type);
 CREATE INDEX idx_cases_status ON cases(status);
 CREATE INDEX idx_cases_deadline_date ON cases(deadline_date);
 CREATE INDEX idx_cases_assigned_user_id ON cases(assigned_user_id);
+CREATE INDEX idx_cases_coordinates ON cases(latitude, longitude)
+    WHERE latitude IS NOT NULL AND longitude IS NOT NULL;
 ```
+
+案件の地図表示は `cases.latitude` / `cases.longitude` を正とする。住所・番地は検索・帳票・補助表示として保持し、緯度/経度が未設定の案件も登録可能とする。緯度/経度は両方揃っている場合のみ有効な案件ピンとして扱う。
 
 **案件番号の採番ルール：**
 
@@ -237,6 +245,32 @@ CREATE TABLE case_financials (
     updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ```
+
+### imported_coordinate_points（座標CSV/Excel取り込み点）
+
+基準点や測量点のCSV/Excel取り込み結果を保持します。案件マスタの座標とは別の補助レイヤーであり、地図表示の正本は `cases.latitude` / `cases.longitude` のままです。
+
+```sql
+CREATE TABLE imported_coordinate_points (
+    id                SERIAL PRIMARY KEY,
+    source_file_name  TEXT NOT NULL,
+    point_name        TEXT,
+    latitude          DOUBLE PRECISION NOT NULL,
+    longitude         DOUBLE PRECISION NOT NULL,
+    memo              TEXT,
+    imported_by_user_id UUID REFERENCES public.users(id),
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CHECK (latitude >= -90 AND latitude <= 90),
+    CHECK (longitude >= -180 AND longitude <= 180)
+);
+
+CREATE INDEX idx_imported_coordinate_points_coordinates
+    ON imported_coordinate_points(latitude, longitude);
+CREATE INDEX idx_imported_coordinate_points_created_at
+    ON imported_coordinate_points(created_at DESC);
+```
+
+取り込み対象は世界測地系（JGD2011/WGS84相当）の緯度/経度です。平面直角座標系のX/Y、日本測地系、任意座標の自動変換はこのテーブルへ直接取り込まず、変換方針確定後に別途実装します。
 
 ### location_areas / location_prefectures / location_municipalities（エリア・都道府県・市町村マスタ）
 

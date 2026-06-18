@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
-import { getCaseSummary } from "@/server/cases";
+import { getCaseParcels } from "@/server/cases";
+import { getCaseSummary } from "@/server/case-summary";
 import { listTemplateGenerationOptions } from "@/server/templates";
 import { DocumentGenerateForm } from "@/components/documents/document-generate-form";
 
@@ -9,13 +10,18 @@ export default async function CaseDocumentsPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const caseResult = await getCaseSummary(Number(id));
+  const caseId = Number(id);
+  const caseResult = await getCaseSummary(caseId);
   if (!caseResult.ok) notFound();
 
-  const templatesResult = await listTemplateGenerationOptions(caseResult.data.case_type);
+  const [templatesResult, parcelsResult] = await Promise.all([
+    listTemplateGenerationOptions(caseResult.data.case_type),
+    getCaseParcels(caseId),
+  ]);
   const templates = templatesResult.ok ? templatesResult.data : [];
+  const parcelCount = parcelsResult.ok ? parcelsResult.data.length : 0;
 
   return (
-    <DocumentGenerateForm caseId={Number(id)} templates={templates} />
+    <DocumentGenerateForm caseId={caseId} templates={templates} parcelCount={parcelCount} />
   );
 }

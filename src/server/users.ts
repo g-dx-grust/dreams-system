@@ -15,6 +15,15 @@ export type UserRow = {
   role: "admin" | "user";
   is_active: boolean;
   created_at: string;
+  last_signed_in: string | null;
+};
+
+export type ListUsersInput = {
+  q?: string;
+  role?: string;
+  active?: string;
+  sort?: string;
+  order?: string;
 };
 
 const InviteSchema = z.object({
@@ -28,14 +37,45 @@ const RoleSchema = z.object({
   role: z.enum(["admin", "user"]),
 });
 
-export async function listUsers(): Promise<ActionResult<UserRow[]>> {
+export async function listUsers(
+  input: ListUsersInput = {},
+): Promise<ActionResult<UserRow[]>> {
   await requireAdmin();
   const supabase = await createClient();
 
-  const { data, error } = await supabase
+  // 並べ替え可能なカラムは whitelist 化（インジェクション防止）。
+  // キーは UI が渡すソートキー、値は実カラム名。
+  const sortableColumns: Record<string, string> = {
+    full_name: "full_name",
+    email: "email",
+    role: "role",
+    is_active: "is_active",
+    created_at: "created_at",
+    last_signed_in: "last_signed_in",
+  };
+  const sortColumn = input.sort ? sortableColumns[input.sort] : undefined;
+  const ascending = input.order === "asc";
+
+  let query = supabase
     .from("users")
-    .select("id, email, full_name, role, is_active, created_at")
-    .order("created_at", { ascending: false });
+    .select("id, email, full_name, role, is_active, created_at, last_signed_in");
+
+  const keyword = input.q?.trim();
+  if (keyword) {
+    const escaped = keyword.replace(/[%,]/g, (m) => `\\${m}`);
+    query = query.or(`full_name.ilike.%${escaped}%,email.ilike.%${escaped}%`);
+  }
+  if (input.role === "admin" || input.role === "user") {
+    query = query.eq("role", input.role);
+  }
+  if (input.active === "active") query = query.eq("is_active", true);
+  else if (input.active === "inactive") query = query.eq("is_active", false);
+
+  // 未指定時の既定順は従来どおり作成日の降順を維持する。
+  if (sortColumn) query = query.order(sortColumn, { ascending });
+  else query = query.order("created_at", { ascending: false });
+
+  const { data, error } = await query;
 
   if (error) return fail("ユーザー一覧の取得に失敗しました");
   return ok(data as UserRow[]);

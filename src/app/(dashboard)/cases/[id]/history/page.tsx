@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getCaseSummary } from "@/server/cases";
+import { getCaseSummary } from "@/server/case-summary";
 import { listDocuments } from "@/server/documents";
 import { Card, CardBody } from "@/components/ui/card";
 import { DocumentHistoryTable } from "@/components/documents/document-history-table";

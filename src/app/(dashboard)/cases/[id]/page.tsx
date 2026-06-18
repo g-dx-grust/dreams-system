@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
-import { getCaseSummary, listAssignableUsers } from "@/server/cases";
+import { listAssignableUsers } from "@/server/cases";
+import { getCaseSummary } from "@/server/case-summary";
 import { CaseEditForm } from "@/components/cases/case-edit-form";
 import { CASE_TYPES, CASE_STATUSES, type CaseUpdateInput } from "@/lib/validators/case";
 
@@ -35,6 +36,8 @@ export default async function CaseBasicPage({
     submission_target: c.submission_target ?? "",
     submission_date: c.submission_date ?? "",
     deadline_date: c.deadline_date ?? "",
+    latitude: c.latitude ?? undefined,
+    longitude: c.longitude ?? undefined,
     memo: c.memo ?? "",
   };
 

@@ -563,6 +563,9 @@ export type ListTemplatesParams = {
   areaId?: number;
   prefectureId?: number;
   municipalityId?: number;
+  q?: string;
+  sort?: string;
+  order?: string;
 };
 
 export async function listTemplates(params: ListTemplatesParams = {}): Promise<
@@ -574,6 +577,12 @@ export async function listTemplates(params: ListTemplatesParams = {}): Promise<
 > {
   await requireUser();
   const supabase = await createClient();
+
+  // 並べ替え許可カラムの whitelist。未指定・不正値は既定順（name 昇順）を維持する。
+  const sortableColumns = ["name", "file_type", "version", "is_active", "updated_at", "created_at"];
+  const sortColumn =
+    params.sort && sortableColumns.includes(params.sort) ? params.sort : "name";
+  const ascending = params.order !== "desc";
 
   try {
     const [{ categories, locationAreas }, tmplRes] = await Promise.all([
@@ -590,7 +599,11 @@ export async function listTemplates(params: ListTemplatesParams = {}): Promise<
         if (isKnownCaseType(params.caseType)) {
           q = q.or(buildApplicableCaseTypesFilter(params.caseType));
         }
-        return q.order("name", { ascending: true });
+        const keyword = params.q?.trim();
+        if (keyword) {
+          q = q.ilike("name", `%${keyword}%`);
+        }
+        return q.order(sortColumn, { ascending });
       })(),
     ]);
 

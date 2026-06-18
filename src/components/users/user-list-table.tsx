@@ -2,7 +2,11 @@
 
 import { useState, useTransition } from "react";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
+import { SortHeader } from "@/components/common/sort-header";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { formatDate } from "@/lib/format";
 import type { UserRow } from "@/server/users";
 import { updateUserRole, setUserActive } from "@/server/users";
 
@@ -20,42 +24,57 @@ export function UserListTable({
 }) {
   return (
     <Table>
-      <THead>
+      <THead sticky>
         <TR>
-          <TH>氏名</TH>
-          <TH>メールアドレス</TH>
-          <TH>ロール</TH>
-          <TH>状態</TH>
-          <TH>操作</TH>
+          <SortHeader column="full_name" label="氏名" />
+          <SortHeader column="email" label="メールアドレス" />
+          <SortHeader column="role" label="ロール" className="w-[140px]" />
+          <SortHeader column="is_active" label="状態" className="w-[100px]" />
+          <SortHeader column="last_signed_in" label="最終ログイン" className="w-[160px]" />
+          <SortHeader column="created_at" label="登録日" className="w-[120px]" />
+          <TH className="w-[260px]">操作</TH>
         </TR>
       </THead>
       <TBody>
         {rows.map((row) => (
-          <UserRow key={row.id} row={row} isSelf={row.id === currentUserId} />
+          <UserRowItem key={row.id} row={row} isSelf={row.id === currentUserId} />
         ))}
       </TBody>
     </Table>
   );
 }
 
-function UserRow({ row, isSelf }: { row: UserRow; isSelf: boolean }) {
-  const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+type Pending = null | "role" | "active";
 
-  const handleRoleToggle = () => {
-    const newRole = row.role === "admin" ? "user" : "admin";
+function UserRowItem({ row, isSelf }: { row: UserRow; isSelf: boolean }) {
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState<Pending>(null);
+  const [roleOpen, setRoleOpen] = useState(false);
+  const [activeOpen, setActiveOpen] = useState(false);
+  const [isBusy, startTransition] = useTransition();
+
+  const displayName = row.full_name ?? row.email;
+  const nextRole = row.role === "admin" ? "user" : "admin";
+
+  const confirmRole = () => {
     setError(null);
+    setPending("role");
     startTransition(async () => {
-      const res = await updateUserRole({ userId: row.id, role: newRole });
+      const res = await updateUserRole({ userId: row.id, role: nextRole });
+      setPending(null);
       if (!res.ok) setError(res.error);
+      else setRoleOpen(false);
     });
   };
 
-  const handleActiveToggle = () => {
+  const confirmActive = () => {
     setError(null);
+    setPending("active");
     startTransition(async () => {
       const res = await setUserActive(row.id, !row.is_active);
+      setPending(null);
       if (!res.ok) setError(res.error);
+      else setActiveOpen(false);
     });
   };
 
@@ -64,33 +83,29 @@ function UserRow({ row, isSelf }: { row: UserRow; isSelf: boolean }) {
       <TD>{row.full_name ?? "—"}</TD>
       <TD className="text-text-grey">{row.email}</TD>
       <TD>
-        <span className={`text-s ${row.role === "admin" ? "font-medium text-main" : "text-text-black"}`}>
+        <Badge tone={row.role === "admin" ? "info" : "neutral"}>
           {RoleLabels[row.role] ?? row.role}
-        </span>
+        </Badge>
       </TD>
       <TD>
-        <span className={`text-s ${row.is_active ? "text-success" : "text-text-grey"}`}>
+        <Badge tone={row.is_active ? "success" : "neutral"}>
           {row.is_active ? "有効" : "無効"}
-        </span>
+        </Badge>
       </TD>
+      <TD className="tabular-nums text-text-grey">{formatDate(row.last_signed_in)}</TD>
+      <TD className="tabular-nums text-text-grey">{formatDate(row.created_at)}</TD>
       <TD>
         {isSelf ? (
           <span className="text-xs text-text-grey">（自分）</span>
         ) : (
-          <div className="flex items-center gap-s">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={handleRoleToggle}
-              loading={isPending}
-            >
+          <div className="flex flex-wrap items-center gap-s">
+            <Button variant="secondary" size="sm" onClick={() => setRoleOpen(true)}>
               {row.role === "admin" ? "一般に変更" : "管理者に変更"}
             </Button>
             <Button
               variant={row.is_active ? "danger" : "secondary"}
               size="sm"
-              onClick={handleActiveToggle}
-              loading={isPending}
+              onClick={() => setActiveOpen(true)}
             >
               {row.is_active ? "無効化する" : "有効化する"}
             </Button>
@@ -98,6 +113,48 @@ function UserRow({ row, isSelf }: { row: UserRow; isSelf: boolean }) {
           </div>
         )}
       </TD>
+
+      <ConfirmDialog
+        open={roleOpen}
+        title="ロールを変更します"
+        description={
+          <>
+            <span className="font-semibold text-text-black">{displayName}</span> さんのロールを「
+            {RoleLabels[row.role]}」から「{RoleLabels[nextRole]}」に変更します。
+            {nextRole === "admin"
+              ? "管理者はユーザー管理を含むすべての操作が可能になります。"
+              : "一般ユーザーに変更すると、管理者向けの操作ができなくなります。"}
+          </>
+        }
+        confirmLabel="変更する"
+        tone="primary"
+        loading={isBusy && pending === "role"}
+        onConfirm={confirmRole}
+        onCancel={() => setRoleOpen(false)}
+      />
+
+      <ConfirmDialog
+        open={activeOpen}
+        title={row.is_active ? "アカウントを無効化します" : "アカウントを有効化します"}
+        description={
+          row.is_active ? (
+            <>
+              <span className="font-semibold text-text-black">{displayName}</span>{" "}
+              さんのアカウントを無効化します。無効化するとログインできなくなります。
+            </>
+          ) : (
+            <>
+              <span className="font-semibold text-text-black">{displayName}</span>{" "}
+              さんのアカウントを有効化します。再びログインできるようになります。
+            </>
+          )
+        }
+        confirmLabel={row.is_active ? "無効化する" : "有効化する"}
+        tone={row.is_active ? "danger" : "primary"}
+        loading={isBusy && pending === "active"}
+        onConfirm={confirmActive}
+        onCancel={() => setActiveOpen(false)}
+      />
     </TR>
   );
 }

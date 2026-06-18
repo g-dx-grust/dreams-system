@@ -5,8 +5,10 @@ import { Download, FileText, Files } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Field } from "@/components/ui/field";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/components/ui/toast";
 import {
   generateCaseDocuments,
   generateDocument,
@@ -19,14 +21,19 @@ import type { TemplateGenerationOption } from "@/server/templates";
 type Props = {
   caseId: number;
   templates: TemplateGenerationOption[];
+  parcelCount: number;
 };
 
-export function DocumentGenerateForm({ caseId, templates }: Props) {
+export function DocumentGenerateForm({ caseId, templates, parcelCount }: Props) {
+  const toast = useToast();
   const [templateId, setTemplateId] = useState<string>("");
   const [selectedTemplateIds, setSelectedTemplateIds] = useState<number[]>(() =>
     templates.map((template) => template.id),
   );
   const [highlight, setHighlight] = useState(true);
+  const hasParcels = parcelCount > 0;
+  const [includeParcelAttachment, setIncludeParcelAttachment] = useState(true);
+  const parcelAttachmentUrl = `/api/cases/${caseId}/parcels/attachment`;
   const [checking, setChecking] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [bulkGenerating, setBulkGenerating] = useState(false);
@@ -108,10 +115,12 @@ export function DocumentGenerateForm({ caseId, templates }: Props) {
       });
       if (!result.ok) {
         setError(result.error);
+        toast({ message: result.error, tone: "danger" });
         return;
       }
       setGenerated(result.data);
       setPreview(null);
+      toast({ message: "帳票を生成しました", tone: "success" });
     } finally {
       setGenerating(false);
     }
@@ -131,9 +140,18 @@ export function DocumentGenerateForm({ caseId, templates }: Props) {
       });
       if (!result.ok) {
         setError(result.error);
+        toast({ message: result.error, tone: "danger" });
         return;
       }
       setBulkGenerated(result.data);
+      if (result.data.failed.length === 0) {
+        toast({ message: `${result.data.generated.length}件の帳票を生成しました`, tone: "success" });
+      } else {
+        toast({
+          message: `${result.data.generated.length}件を生成しました（${result.data.failed.length}件未生成）`,
+          tone: "warning",
+        });
+      }
     } finally {
       setBulkGenerating(false);
     }
@@ -186,9 +204,10 @@ export function DocumentGenerateForm({ caseId, templates }: Props) {
                   variant="secondary"
                   onClick={handleGenerate}
                   loading={generating}
+                  loadingLabel="生成中…"
                   disabled={!templateId || bulkGenerating || (preview?.missingRequired?.length ?? 0) > 0}
                 >
-                  選択した帳票を生成する
+                  この帳票を生成する
                 </Button>
               </div>
             </div>
@@ -220,11 +239,10 @@ export function DocumentGenerateForm({ caseId, templates }: Props) {
                       key={template.id}
                       className="flex min-w-0 cursor-pointer items-start gap-s border-b border-border px-s py-s last:border-b-0 hover:bg-grey-7"
                     >
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         checked={selectedTemplateSet.has(template.id)}
                         onChange={(e) => handleToggleTemplate(template.id, e.target.checked)}
-                        className="mt-[3px] h-4 w-4 shrink-0 rounded border-border"
+                        className="mt-[3px]"
                         disabled={bulkGenerating}
                       />
                       <span className="flex min-w-0 flex-1 flex-col gap-xxs">
@@ -260,17 +278,45 @@ export function DocumentGenerateForm({ caseId, templates }: Props) {
             </div>
           </div>
 
-          <label className="flex items-center gap-xs text-s cursor-pointer">
-            <input
-              type="checkbox"
-              checked={highlight}
-              onChange={(e) => setHighlight(e.target.checked)}
-              className="rounded"
-            />
+          <label className="flex cursor-pointer items-center gap-xs text-s">
+            <Checkbox checked={highlight} onChange={(e) => setHighlight(e.target.checked)} />
             転記箇所をハイライトする
           </label>
 
-          {error && <p className="text-s text-danger">{error}</p>}
+          <div className="flex flex-col gap-xs rounded-s border border-border bg-background p-m text-s">
+            <div className="flex flex-wrap items-center justify-between gap-s">
+              <span className="font-medium">筆別紙（全筆一覧）</span>
+              {hasParcels ? (
+                <a
+                  href={parcelAttachmentUrl}
+                  download
+                  className="inline-flex h-8 shrink-0 items-center gap-xs whitespace-nowrap rounded-m border border-border bg-white px-s text-s font-medium text-main transition-colors hover:bg-grey-6"
+                >
+                  <Download size={14} />
+                  別紙だけダウンロード
+                </a>
+              ) : (
+                <span className="text-xs text-text-grey">登録された筆がありません。</span>
+              )}
+            </div>
+            <label className="flex cursor-pointer items-center gap-xs">
+              <Checkbox
+                checked={includeParcelAttachment}
+                onChange={(e) => setIncludeParcelAttachment(e.target.checked)}
+                disabled={!hasParcels}
+              />
+              一括生成のZIPに筆別紙（全{parcelCount}筆の一覧）を含める
+            </label>
+          </div>
+
+          {error && (
+            <div
+              className="rounded-s border border-danger bg-danger-soft p-s text-s text-danger"
+              role="alert"
+            >
+              {error}
+            </div>
+          )}
 
           {preview && (
             <div className="rounded bg-background border border-border p-m text-s flex flex-col gap-xs">
@@ -329,7 +375,11 @@ export function DocumentGenerateForm({ caseId, templates }: Props) {
                 </div>
                 {bulkGenerated.downloadUrl && (
                   <a
-                    href={bulkGenerated.downloadUrl}
+                    href={
+                      includeParcelAttachment && hasParcels
+                        ? `${bulkGenerated.downloadUrl}&besshi=1`
+                        : bulkGenerated.downloadUrl
+                    }
                     download
                     className="inline-flex h-8 shrink-0 items-center justify-center gap-xs whitespace-nowrap rounded-m border border-border bg-white px-s text-s font-medium text-main transition-colors hover:bg-grey-6"
                   >

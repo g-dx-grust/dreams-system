@@ -26,7 +26,9 @@ const EMPTY_PERSON: PersonContext = {
 const EMPTY_PARCEL: ParcelContext = {
   pref: "",
   city: "",
+  oaza: "",
   aza: "",
+  oazaAza: "",
   chiban: "",
   locationFull: "",
   chimoku: "",
@@ -88,9 +90,11 @@ export function buildTransferContext(args: {
     .map((p) => ({
       pref: p.pref ?? "",
       city: p.city ?? "",
+      oaza: p.oaza ?? "",
       aza: p.aza ?? "",
+      oazaAza: [p.oaza, p.aza].filter(Boolean).join(""),
       chiban: p.chiban ?? "",
-      locationFull: [p.city, p.aza, p.chiban].filter(Boolean).join(""),
+      locationFull: [p.city, p.oaza, p.aza, p.chiban].filter(Boolean).join(""),
       chimoku: p.chimoku ?? "",
       area:
         p.area != null

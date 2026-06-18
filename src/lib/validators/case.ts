@@ -59,20 +59,94 @@ export const CasePersonRoleLabels: Record<CasePersonRole, string> = {
   other: "その他",
 };
 
-export const CaseCreateSchema = z.object({
+/*
+ * 提出日と締切日が両方入力されている場合のみ前後関係を検証する。
+ * 値は HTML date 入力（YYYY-MM-DD）想定。空文字は未入力として扱う。
+ */
+const refineSubmissionBeforeDeadline = <T extends { submission_date?: string; deadline_date?: string }>(
+  value: T,
+  ctx: z.RefinementCtx,
+) => {
+  const submission = value.submission_date?.trim();
+  const deadline = value.deadline_date?.trim();
+  if (submission && deadline && submission > deadline) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["deadline_date"],
+      message: "締切日は提出日以降の日付を指定してください",
+    });
+  }
+};
+
+const optionalCoordinate = (min: number, max: number, label: string) =>
+  z.preprocess(
+    (value) => {
+      if (value == null) return null;
+      if (typeof value === "number" && Number.isNaN(value)) return null;
+      if (typeof value === "string") {
+        const trimmed = value.trim();
+        return trimmed === "" ? null : Number(trimmed);
+      }
+      return value;
+    },
+    z
+      .number({ invalid_type_error: `${label}は数値で入力してください` })
+      .finite(`${label}は数値で入力してください`)
+      .min(min, `${label}の範囲が正しくありません`)
+      .max(max, `${label}の範囲が正しくありません`)
+      .nullable()
+      .optional(),
+  );
+
+const refineCoordinatePair = <
+  T extends { latitude?: number | null; longitude?: number | null },
+>(
+  value: T,
+  ctx: z.RefinementCtx,
+) => {
+  const hasLat = value.latitude != null;
+  const hasLng = value.longitude != null;
+  if (hasLat === hasLng) return;
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    path: [hasLat ? "longitude" : "latitude"],
+    message: "緯度と経度は両方入力してください",
+  });
+};
+
+const refineCaseBase = <
+  T extends {
+    submission_date?: string;
+    deadline_date?: string;
+    latitude?: number | null;
+    longitude?: number | null;
+  },
+>(
+  value: T,
+  ctx: z.RefinementCtx,
+) => {
+  refineSubmissionBeforeDeadline(value, ctx);
+  refineCoordinatePair(value, ctx);
+};
+
+const CaseBaseSchema = z.object({
   case_name: z.string().min(1, "案件名を入力してください").max(300),
   case_type: z.enum(CASE_TYPES),
   assigned_user_id: z.string().uuid().nullable().optional(),
   submission_target: z.string().max(200).optional(),
   submission_date: z.string().optional(),
   deadline_date: z.string().optional(),
+  latitude: optionalCoordinate(-90, 90, "緯度"),
+  longitude: optionalCoordinate(-180, 180, "経度"),
   memo: z.string().optional(),
 });
+
+export const CaseCreateSchema = CaseBaseSchema.superRefine(refineCaseBase);
 export type CaseCreateInput = z.infer<typeof CaseCreateSchema>;
 
-export const CaseUpdateSchema = CaseCreateSchema.extend({
+export const CaseUpdateSchema = CaseBaseSchema.extend({
   status: z.enum(CASE_STATUSES),
-});
+}).superRefine(refineCaseBase);
 export type CaseUpdateInput = z.infer<typeof CaseUpdateSchema>;
 
 export const CasePersonAddSchema = z.object({
@@ -108,6 +182,7 @@ export const CaseParcelSchema = z.object({
   sort_order: z.number().int().nonnegative().default(0),
   pref: z.string().max(20).optional(),
   city: z.string().max(50).optional(),
+  oaza: z.string().max(100).optional(),
   aza: z.string().max(100).optional(),
   chiban: z.string().max(100).optional(),
   chimoku: z.string().max(30).optional(),

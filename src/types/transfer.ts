@@ -21,7 +21,9 @@ export type PersonContext = {
 export type ParcelContext = {
   pref: string;
   city: string;
+  oaza: string;
   aza: string;
+  oazaAza: string;
   chiban: string;
   locationFull: string;
   chimoku: string;

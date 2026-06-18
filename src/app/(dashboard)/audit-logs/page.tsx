@@ -2,13 +2,18 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/permissions";
 import { listAuditLogs } from "@/server/audit-logs";
+import { listUsers } from "@/server/users";
 import { PageHeader } from "@/components/ui/page-header";
-import { Card, CardBody } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
+import { Empty } from "@/components/ui/empty";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { SortHeader } from "@/components/common/sort-header";
+import {
+  AuditLogsFilter,
+  type AuditLogUserOption,
+} from "@/components/audit-logs/audit-logs-filter";
+import { auditActionLabel, auditActionTone, auditEntityLabel } from "@/lib/audit-labels";
 
 const ACTION_OPTIONS = [
   "case.create",
@@ -20,6 +25,7 @@ const ACTION_OPTIONS = [
   "person.create",
   "person.update",
   "person.delete",
+  "person.resync",
   "document.generate",
   "template.upload",
   "template.update",
@@ -39,245 +45,209 @@ const ENTITY_OPTIONS = [
   "user",
 ] as const;
 
+type Search = {
+  q?: string;
+  user?: string;
+  action?: string;
+  entityType?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  sort?: string;
+  order?: string;
+  page?: string;
+};
+
 export default async function AuditLogsPage({
   searchParams,
 }: {
-  searchParams: Promise<{
-    action?: string;
-    entityType?: string;
-    dateFrom?: string;
-    dateTo?: string;
-    page?: string;
-  }>;
+  searchParams: Promise<Search>;
 }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   if (user.role !== "admin") redirect("/");
 
   const sp = await searchParams;
-  const page = Number(sp.page ?? 1);
-  const result = await listAuditLogs({
-    action: sp.action || undefined,
-    entityType: sp.entityType || undefined,
-    dateFrom: sp.dateFrom || undefined,
-    dateTo: sp.dateTo || undefined,
-    page,
-  });
+  const page = Math.max(1, Number(sp.page ?? 1));
+
+  const [result, usersRes] = await Promise.all([
+    listAuditLogs({
+      q: sp.q || undefined,
+      userId: sp.user || undefined,
+      action: sp.action || undefined,
+      entityType: sp.entityType || undefined,
+      dateFrom: sp.dateFrom || undefined,
+      dateTo: sp.dateTo || undefined,
+      sort: sp.sort,
+      order: sp.order,
+      page,
+    }),
+    listUsers(),
+  ]);
+
+  if (!result.ok) return <p className="text-danger">{result.error}</p>;
+
+  const { items, total, perPage } = result.data;
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
+  const rangeStart = total === 0 ? 0 : (page - 1) * perPage + 1;
+  const rangeEnd = Math.min(page * perPage, total);
+
+  const users: AuditLogUserOption[] = usersRes.ok
+    ? usersRes.data.map((u) => ({ id: u.id, full_name: u.full_name, email: u.email }))
+    : [];
 
   return (
     <>
       <PageHeader
         title="監査ログ"
-        description="操作履歴を日付・対象・アクションで追跡できます"
+        description="操作履歴をユーザー・アクション・対象・期間で追跡できます。"
       />
 
-      <div className="flex flex-col gap-m">
-        <Card>
-          <CardBody>
-            <form className="flex flex-wrap items-end gap-s">
-              <div className="flex flex-col gap-xs">
-                <label className="text-s font-medium">アクション</label>
-                <Select name="action" defaultValue={sp.action ?? ""} className="w-[220px]">
-                  <option value="">すべて</option>
-                  {ACTION_OPTIONS.map((action) => (
-                    <option key={action} value={action}>
-                      {action}
-                    </option>
-                  ))}
-                </Select>
-              </div>
+      <Card className="mb-m">
+        <AuditLogsFilter
+          users={users}
+          actions={ACTION_OPTIONS}
+          entityTypes={ENTITY_OPTIONS}
+        />
+      </Card>
 
-              <div className="flex flex-col gap-xs">
-                <label className="text-s font-medium">対象</label>
-                <Select
-                  name="entityType"
-                  defaultValue={sp.entityType ?? ""}
-                  className="w-[180px]"
-                >
-                  <option value="">すべて</option>
-                  {ENTITY_OPTIONS.map((entityType) => (
-                    <option key={entityType} value={entityType}>
-                      {entityType}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-
-              <div className="flex flex-col gap-xs">
-                <label className="text-s font-medium">開始日</label>
-                <Input type="date" name="dateFrom" defaultValue={sp.dateFrom ?? ""} />
-              </div>
-
-              <div className="flex flex-col gap-xs">
-                <label className="text-s font-medium">終了日</label>
-                <Input type="date" name="dateTo" defaultValue={sp.dateTo ?? ""} />
-              </div>
-
-              <Button type="submit" variant="primary">
-                絞り込む
-              </Button>
-              <Link href="/audit-logs">
-                <Button type="button" variant="secondary">
-                  クリア
-                </Button>
-              </Link>
-            </form>
-          </CardBody>
-        </Card>
-
-        <Card>
-          <CardBody className="p-0">
-            {result.ok ? (
-              <>
-                <div className="border-b border-border px-l py-m text-s text-text-grey">
-                  {result.data.total.toLocaleString("ja-JP")} 件
-                </div>
-                {result.data.items.length === 0 ? (
-                  <p className="px-l py-l text-s text-text-grey">該当する監査ログはありません。</p>
-                ) : (
-                  <>
-                    <Table>
-                      <THead>
-                        <TR>
-                          <TH>日時</TH>
-                          <TH>ユーザー</TH>
-                          <TH>アクション</TH>
-                          <TH>対象</TH>
-                          <TH>詳細</TH>
-                          <TH>IP</TH>
-                        </TR>
-                      </THead>
-                      <TBody>
-                        {result.data.items.map((item) => (
-                          <TR key={item.id}>
-                            <TD className="whitespace-nowrap">{formatDateTime(item.created_at)}</TD>
-                            <TD>
-                              <div className="font-medium">
-                                {item.user_name || item.user_email || "—"}
-                              </div>
-                              {item.user_name && item.user_email && (
-                                <div className="text-xs text-text-grey">{item.user_email}</div>
-                              )}
-                            </TD>
-                            <TD>
-                              <Badge tone={actionTone(item.action)}>{item.action}</Badge>
-                            </TD>
-                            <TD className="whitespace-nowrap">
-                              {item.entity_type ?? "—"}
-                              {item.entity_id != null ? ` #${item.entity_id}` : ""}
-                            </TD>
-                            <TD className="max-w-[440px]">
-                              {item.detail ? (
-                                <details>
-                                  <summary className="cursor-pointer text-s text-main">
-                                    JSON を表示
-                                  </summary>
-                                  <pre className="mt-xs overflow-x-auto rounded-s bg-grey-6 p-s text-xs">
-                                    {JSON.stringify(item.detail, null, 2)}
-                                  </pre>
-                                </details>
-                              ) : (
-                                <span className="text-text-grey">—</span>
-                              )}
-                            </TD>
-                            <TD className="whitespace-nowrap text-xs text-text-grey">
-                              {item.ip_address ?? "—"}
-                            </TD>
-                          </TR>
-                        ))}
-                      </TBody>
-                    </Table>
-
-                    <div className="flex items-center justify-between border-t border-border px-l py-m">
-                      <span className="text-s text-text-grey">
-                        {result.data.page} / {Math.max(1, Math.ceil(result.data.total / result.data.perPage))}
-                        ページ
-                      </span>
-                      <div className="flex items-center gap-xs">
-                        <PageLink
-                          page={result.data.page - 1}
-                          disabled={result.data.page <= 1}
-                          searchParams={sp}
-                        >
-                          前へ
-                        </PageLink>
-                        <PageLink
-                          page={result.data.page + 1}
-                          disabled={result.data.page * result.data.perPage >= result.data.total}
-                          searchParams={sp}
-                        >
-                          次へ
-                        </PageLink>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </>
-            ) : (
-              <p className="p-m text-s text-danger">{result.error}</p>
-            )}
-          </CardBody>
-        </Card>
+      <div className="mb-s flex items-center justify-between gap-m text-s text-text-grey">
+        <p>
+          全 <span className="font-semibold text-text-black tabular-nums">{total}</span> 件
+          {total > perPage && (
+            <span className="ml-xs text-text-quaternary tabular-nums">
+              （{rangeStart}〜{rangeEnd} 件を表示）
+            </span>
+          )}
+        </p>
       </div>
+
+      {items.length === 0 ? (
+        <Card>
+          <Empty
+            title="該当する監査ログがありません"
+            hint="絞り込み条件を変えてください。操作が記録されると、ここに履歴が表示されます。"
+          />
+        </Card>
+      ) : (
+        <Card>
+          <Table>
+            <THead>
+              <TR>
+                <SortHeader column="created_at" label="日時" className="w-[170px]" />
+                <TH className="w-[200px]">ユーザー</TH>
+                <SortHeader column="action" label="アクション" className="w-[180px]" />
+                <SortHeader column="entity_type" label="対象" className="w-[160px]" />
+                <TH>詳細</TH>
+                <TH className="w-[130px]">IP</TH>
+              </TR>
+            </THead>
+            <TBody>
+              {items.map((item) => (
+                <TR key={item.id}>
+                  <TD className="whitespace-nowrap tabular-nums">
+                    {formatDateTime(item.created_at)}
+                  </TD>
+                  <TD>
+                    <div className="font-medium text-text-black">
+                      {item.user_name || item.user_email || "—"}
+                    </div>
+                    {item.user_name && item.user_email && (
+                      <div className="text-xs text-text-grey">{item.user_email}</div>
+                    )}
+                  </TD>
+                  <TD>
+                    <Badge tone={auditActionTone(item.action)}>
+                      {auditActionLabel(item.action)}
+                    </Badge>
+                  </TD>
+                  <TD className="whitespace-nowrap">
+                    {auditEntityLabel(item.entity_type)}
+                    {item.entity_id != null && (
+                      <span className="ml-xs text-xs text-text-grey tabular-nums">
+                        #{item.entity_id}
+                      </span>
+                    )}
+                  </TD>
+                  <TD className="max-w-[440px]">
+                    {item.detail ? (
+                      <details>
+                        <summary className="cursor-pointer text-s text-main">
+                          JSON を表示
+                        </summary>
+                        <pre className="mt-xs overflow-x-auto rounded-s bg-grey-6 p-s text-xs">
+                          {JSON.stringify(item.detail, null, 2)}
+                        </pre>
+                      </details>
+                    ) : (
+                      <span className="text-text-grey">—</span>
+                    )}
+                  </TD>
+                  <TD className="whitespace-nowrap text-xs text-text-grey tabular-nums">
+                    {item.ip_address ?? "—"}
+                  </TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
+        </Card>
+      )}
+
+      {totalPages > 1 && (
+        <div className="mt-m flex items-center justify-between text-s">
+          <p className="text-text-grey tabular-nums">
+            {rangeStart}〜{rangeEnd} / 全 {total} 件
+          </p>
+          <div className="flex items-center gap-xs">
+            <PaginationLink page={page - 1} disabled={page <= 1} search={sp}>
+              前へ
+            </PaginationLink>
+            <span className="px-s py-xs tabular-nums">
+              {page} / {totalPages}
+            </span>
+            <PaginationLink page={page + 1} disabled={page >= totalPages} search={sp}>
+              次へ
+            </PaginationLink>
+          </div>
+        </div>
+      )}
     </>
   );
 }
 
-function PageLink({
+function PaginationLink({
   page,
   disabled,
-  searchParams,
+  search,
   children,
 }: {
   page: number;
   disabled: boolean;
-  searchParams: {
-    action?: string;
-    entityType?: string;
-    dateFrom?: string;
-    dateTo?: string;
-    page?: string;
-  };
+  search: Search;
   children: React.ReactNode;
 }) {
   if (disabled) {
-    return (
-      <Button type="button" variant="secondary" size="sm" disabled>
-        {children}
-      </Button>
-    );
+    return <span className="px-s py-xs text-text-disabled">{children}</span>;
   }
-
   const params = new URLSearchParams();
-  if (searchParams.action) params.set("action", searchParams.action);
-  if (searchParams.entityType) params.set("entityType", searchParams.entityType);
-  if (searchParams.dateFrom) params.set("dateFrom", searchParams.dateFrom);
-  if (searchParams.dateTo) params.set("dateTo", searchParams.dateTo);
+  if (search.q) params.set("q", search.q);
+  if (search.user) params.set("user", search.user);
+  if (search.action) params.set("action", search.action);
+  if (search.entityType) params.set("entityType", search.entityType);
+  if (search.dateFrom) params.set("dateFrom", search.dateFrom);
+  if (search.dateTo) params.set("dateTo", search.dateTo);
+  if (search.sort) params.set("sort", search.sort);
+  if (search.order) params.set("order", search.order);
   params.set("page", String(page));
-
   return (
-    <Link href={`/audit-logs?${params.toString()}`}>
-      <Button type="button" variant="secondary" size="sm">
-        {children}
-      </Button>
+    <Link
+      href={`/audit-logs?${params.toString()}`}
+      className="rounded-s border border-border bg-white px-s py-xs hover:bg-grey-7"
+    >
+      {children}
     </Link>
   );
 }
 
 function formatDateTime(value: string): string {
   return new Date(value).toLocaleString("ja-JP");
-}
-
-function actionTone(action: string): "neutral" | "info" | "warning" | "success" | "danger" {
-  if (action.endsWith(".delete") || action.endsWith(".remove") || action.endsWith(".deactivate")) {
-    return "danger";
-  }
-  if (action.endsWith(".create") || action.endsWith(".invite") || action.endsWith(".generate")) {
-    return "success";
-  }
-  if (action.endsWith(".update") || action.endsWith(".resync") || action.endsWith(".role_change")) {
-    return "info";
-  }
-  if (action.endsWith(".activate")) return "success";
-  return "neutral";
 }

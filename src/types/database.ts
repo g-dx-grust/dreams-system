@@ -45,6 +45,7 @@ export type Database = {
           created_at: string
           detail: Json | null
           entity_id: number | null
+          entity_id_uuid: string | null
           entity_type: string | null
           id: number
           ip_address: string | null
@@ -55,6 +56,7 @@ export type Database = {
           created_at?: string
           detail?: Json | null
           entity_id?: number | null
+          entity_id_uuid?: string | null
           entity_type?: string | null
           id?: number
           ip_address?: string | null
@@ -65,6 +67,7 @@ export type Database = {
           created_at?: string
           detail?: Json | null
           entity_id?: number | null
+          entity_id_uuid?: string | null
           entity_type?: string | null
           id?: number
           ip_address?: string | null
@@ -124,17 +127,42 @@ export type Database = {
           },
         ]
       }
+      case_number_counters: {
+        Row: {
+          case_type: string
+          last_sequence: number
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          case_type: string
+          last_sequence?: number
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          case_type?: string
+          last_sequence?: number
+          updated_at?: string
+          year?: number
+        }
+        Relationships: []
+      }
       case_parcels: {
         Row: {
           area: number | null
           aza: string | null
+          boundary: unknown
           case_id: number
           chiban: string | null
           chimoku: string | null
           city: string | null
           created_at: string
+          geo_status: string
+          geom: unknown
           id: number
           memo: string | null
+          oaza: string | null
           pref: string | null
           sort_order: number
           tenyo_area: number | null
@@ -142,13 +170,17 @@ export type Database = {
         Insert: {
           area?: number | null
           aza?: string | null
+          boundary?: unknown
           case_id: number
           chiban?: string | null
           chimoku?: string | null
           city?: string | null
           created_at?: string
+          geo_status?: string
+          geom?: unknown
           id?: number
           memo?: string | null
+          oaza?: string | null
           pref?: string | null
           sort_order?: number
           tenyo_area?: number | null
@@ -156,13 +188,17 @@ export type Database = {
         Update: {
           area?: number | null
           aza?: string | null
+          boundary?: unknown
           case_id?: number
           chiban?: string | null
           chimoku?: string | null
           city?: string | null
           created_at?: string
+          geo_status?: string
+          geom?: unknown
           id?: number
           memo?: string | null
+          oaza?: string | null
           pref?: string | null
           sort_order?: number
           tenyo_area?: number | null
@@ -276,6 +312,8 @@ export type Database = {
           created_at: string
           deadline_date: string | null
           id: number
+          latitude: number | null
+          longitude: number | null
           memo: string | null
           status: string
           submission_date: string | null
@@ -290,6 +328,8 @@ export type Database = {
           created_at?: string
           deadline_date?: string | null
           id?: number
+          latitude?: number | null
+          longitude?: number | null
           memo?: string | null
           status?: string
           submission_date?: string | null
@@ -304,6 +344,8 @@ export type Database = {
           created_at?: string
           deadline_date?: string | null
           id?: number
+          latitude?: number | null
+          longitude?: number | null
           memo?: string | null
           status?: string
           submission_date?: string | null
@@ -314,6 +356,41 @@ export type Database = {
           {
             foreignKeyName: "cases_assigned_user_id_fkey"
             columns: ["assigned_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      daily_reports: {
+        Row: {
+          body: string
+          id: string
+          report_date: string
+          submitted_at: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          body: string
+          id?: string
+          report_date: string
+          submitted_at?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          body?: string
+          id?: string
+          report_date?: string
+          submitted_at?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_reports_user_id_fkey"
+            columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
@@ -380,6 +457,47 @@ export type Database = {
             columns: ["template_id"]
             isOneToOne: false
             referencedRelation: "templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      imported_coordinate_points: {
+        Row: {
+          created_at: string
+          id: number
+          imported_by_user_id: string | null
+          latitude: number
+          longitude: number
+          memo: string | null
+          point_name: string | null
+          source_file_name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          imported_by_user_id?: string | null
+          latitude: number
+          longitude: number
+          memo?: string | null
+          point_name?: string | null
+          source_file_name: string
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          imported_by_user_id?: string | null
+          latitude?: number
+          longitude?: number
+          memo?: string | null
+          point_name?: string | null
+          source_file_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "imported_coordinate_points_imported_by_user_id_fkey"
+            columns: ["imported_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -546,6 +664,144 @@ export type Database = {
           zip?: string | null
         }
         Relationships: []
+      }
+      schedule_types: {
+        Row: {
+          color: string
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          color: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      schedules: {
+        Row: {
+          actual_end_at: string | null
+          actual_minutes: number | null
+          actual_start_at: string | null
+          case_id: number | null
+          case_number: string | null
+          co_user_ids: string[]
+          created_at: string
+          created_by: string | null
+          end_at: string
+          id: string
+          is_all_day: boolean
+          location: string | null
+          memo: string | null
+          schedule_type_id: string | null
+          start_at: string
+          status: string
+          title: string
+          updated_at: string
+          updated_by: string | null
+          user_id: string | null
+          work_category_id: string | null
+        }
+        Insert: {
+          actual_end_at?: string | null
+          actual_minutes?: number | null
+          actual_start_at?: string | null
+          case_id?: number | null
+          case_number?: string | null
+          co_user_ids?: string[]
+          created_at?: string
+          created_by?: string | null
+          end_at: string
+          id?: string
+          is_all_day?: boolean
+          location?: string | null
+          memo?: string | null
+          schedule_type_id?: string | null
+          start_at: string
+          status?: string
+          title: string
+          updated_at?: string
+          updated_by?: string | null
+          user_id?: string | null
+          work_category_id?: string | null
+        }
+        Update: {
+          actual_end_at?: string | null
+          actual_minutes?: number | null
+          actual_start_at?: string | null
+          case_id?: number | null
+          case_number?: string | null
+          co_user_ids?: string[]
+          created_at?: string
+          created_by?: string | null
+          end_at?: string
+          id?: string
+          is_all_day?: boolean
+          location?: string | null
+          memo?: string | null
+          schedule_type_id?: string | null
+          start_at?: string
+          status?: string
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+          user_id?: string | null
+          work_category_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedules_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedules_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedules_schedule_type_id_fkey"
+            columns: ["schedule_type_id"]
+            isOneToOne: false
+            referencedRelation: "schedule_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedules_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedules_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       template_categories: {
         Row: {
@@ -726,7 +982,53 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      clear_case_coordinates: { Args: { p_case_id: number }; Returns: number }
+      clear_case_parcel_geo: { Args: { p_parcel_id: number }; Returns: number }
+      create_case_with_number:
+        | {
+            Args: {
+              p_assigned_user_id?: string
+              p_case_name: string
+              p_case_type: string
+              p_deadline_date?: string
+              p_memo?: string
+              p_submission_date?: string
+              p_submission_target?: string
+            }
+            Returns: {
+              case_number: string
+              id: number
+            }[]
+          }
+        | {
+            Args: {
+              p_assigned_user_id: string
+              p_case_name: string
+              p_case_type: string
+              p_deadline_date: string
+              p_latitude: number
+              p_longitude: number
+              p_memo: string
+              p_submission_date: string
+              p_submission_target: string
+            }
+            Returns: {
+              case_number: string
+              id: number
+            }[]
+          }
       current_user_role: { Args: never; Returns: string }
+      dashboard_employee_daily_sales: {
+        Args: { p_month?: string }
+        Returns: {
+          assigned_user_id: string
+          case_count: number
+          employee_name: string
+          invoice_amount: number
+          paid_amount: number
+          sale_date: string
+        }[]
+      }
       dashboard_monthly_stats: {
         Args: never
         Returns: {
@@ -772,9 +1074,91 @@ export type Database = {
           similarity: number
         }[]
       }
+      get_all_cases_for_map: { Args: never; Returns: Json }
+      get_all_parcels_for_map: { Args: never; Returns: Json }
+      get_case_map: { Args: { p_case_id: number }; Returns: Json }
+      get_case_parcels_for_map: { Args: { p_case_id: number }; Returns: Json }
       is_active_user: { Args: never; Returns: boolean }
       is_admin: { Args: never; Returns: boolean }
+      list_cases_safe: {
+        Args: {
+          p_assigned_user_id?: string
+          p_case_type?: string
+          p_deadline_from?: string
+          p_deadline_to?: string
+          p_limit?: number
+          p_offset?: number
+          p_order?: string
+          p_overdue_only?: boolean
+          p_q?: string
+          p_sort?: string
+          p_status?: string
+        }
+        Returns: {
+          assigned_user_id: string
+          case_name: string
+          case_number: string
+          case_type: string
+          created_at: string
+          deadline_date: string
+          id: number
+          memo: string
+          status: string
+          submission_date: string
+          submission_target: string
+          total_count: number
+          updated_at: string
+        }[]
+      }
+      list_persons_safe: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_order?: string
+          p_person_type?: string
+          p_q?: string
+          p_sort?: string
+        }
+        Returns: {
+          address_city: string
+          address_line1: string
+          address_line2: string
+          address_pref: string
+          address_town: string
+          corporate_number: string
+          created_at: string
+          default_case_role: string
+          email: string
+          fax: string
+          id: number
+          memo: string
+          name: string
+          name_kana: string
+          person_type: string
+          phone: string
+          representative_name: string
+          total_count: number
+          updated_at: string
+          zip: string
+        }[]
+      }
       next_case_number: { Args: { p_case_type: string }; Returns: string }
+      replace_case_parcels: {
+        Args: { p_case_id: number; p_rows: Json }
+        Returns: number
+      }
+      replace_template_mappings: {
+        Args: { p_rows: Json; p_template_id: number }
+        Returns: number
+      }
+      set_case_coordinates: {
+        Args: { p_case_id: number; p_lat: number; p_lng: number }
+        Returns: number
+      }
+      set_case_parcel_pin: {
+        Args: { p_lat: number; p_lng: number; p_parcel_id: number }
+        Returns: number
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
     }

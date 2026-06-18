@@ -23,7 +23,30 @@ const CATEGORY_CONFIG = new Map([
     "農地転用許可",
     { slug: "farmland_conversion", caseType: "farmland_conversion", sortOrder: 4 },
   ],
+  [
+    "その他",
+    { slug: "other", caseType: "other", sortOrder: 99 },
+  ],
 ]);
+
+const CATEGORY_INFERENCE_RULES = [
+  {
+    name: "土地改良区",
+    pattern: /土地改良|地区除外|用水|受益地|農地転用等の通知/u,
+  },
+  {
+    name: "境界確定測量",
+    pattern: /境界|官民|査定|立会|確定図|筆界/u,
+  },
+  {
+    name: "建築許可",
+    pattern: /建築許可|開発許可|開発・建築|都市計画法|適合証明|60条/u,
+  },
+  {
+    name: "農地転用許可",
+    pattern: /農地法|農地転用|農振|農用地|5条|4条|3条|非農地/u,
+  },
+];
 
 const TARGET_XMLS = [
   "word/document.xml",
@@ -58,6 +81,7 @@ function printUsage() {
 
 Options:
   --dry-run           登録内容だけ確認して DB / Storage は更新しない
+  --source-dir <dir>  取り込み元フォルダ（default: docs/様式）
   --category <name>   特定カテゴリのみ取り込む（例: 土地改良区）
   --match <text>      相対パスに text を含むファイルだけ取り込む
   --help              このヘルプを表示
@@ -67,6 +91,7 @@ Options:
 function parseArgs(argv) {
   const options = {
     dryRun: false,
+    sourceDir: path.join("docs", "様式"),
     category: null,
     match: null,
   };
@@ -74,8 +99,16 @@ function parseArgs(argv) {
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
 
+    if (arg === "--") continue;
+
     if (arg === "--dry-run") {
       options.dryRun = true;
+      continue;
+    }
+
+    if (arg === "--source-dir") {
+      options.sourceDir = argv[index + 1] ?? "";
+      index += 1;
       continue;
     }
 
@@ -98,6 +131,8 @@ function parseArgs(argv) {
 
     throw new Error(`Unknown argument: ${arg}`);
   }
+
+  if (!options.sourceDir) throw new Error("--source-dir を指定してください。");
 
   return options;
 }
@@ -195,15 +230,29 @@ function inferMunicipalityCode(text) {
   return null;
 }
 
+function inferCategoryConfig(categoryName, relativePath) {
+  const direct = CATEGORY_CONFIG.get(categoryName);
+  if (direct) return { name: categoryName, ...direct };
+
+  const text = normalizeLabel(relativePath);
+  for (const rule of CATEGORY_INFERENCE_RULES) {
+    const config = CATEGORY_CONFIG.get(rule.name);
+    if (config && rule.pattern.test(text)) {
+      return { name: rule.name, ...config };
+    }
+  }
+
+  const fallback = CATEGORY_CONFIG.get("その他");
+  if (!fallback) {
+    throw new Error("カテゴリ未定義: その他");
+  }
+  return { name: "その他", ...fallback };
+}
+
 function buildPlanEntry(rootDir, fullPath) {
   const relativePath = path.relative(rootDir, fullPath);
   const pathParts = relativePath.split(path.sep);
-  const categoryName = pathParts[0];
-  const categoryConfig = CATEGORY_CONFIG.get(categoryName);
-
-  if (!categoryConfig) {
-    throw new Error(`カテゴリ未定義: ${relativePath}`);
-  }
+  const categoryConfig = inferCategoryConfig(pathParts[0], relativePath);
 
   const originalFileName = pathParts[pathParts.length - 1];
   const fileType = path.extname(originalFileName).slice(1).toLowerCase();
@@ -216,7 +265,7 @@ function buildPlanEntry(rootDir, fullPath) {
   return {
     fullPath,
     relativePath: relativePath.split(path.sep).join("/"),
-    categoryName,
+    categoryName: categoryConfig.name,
     categorySlug: categoryConfig.slug,
     caseType: categoryConfig.caseType,
     fileType,
@@ -245,7 +294,32 @@ async function main() {
   const options = parseArgs(process.argv.slice(2));
 
   const projectRoot = process.cwd();
-  const sourceRoot = path.join(projectRoot, "docs", "様式");
+  const sourceRoot = path.resolve(projectRoot, options.sourceDir);
+
+  const files = await collectFiles(sourceRoot);
+  const plan = files
+    .map((filePath) => buildPlanEntry(sourceRoot, filePath))
+    .filter((entry) => !options.category || entry.categoryName === options.category)
+    .filter((entry) => !options.match || entry.relativePath.includes(options.match));
+
+  if (plan.length === 0) {
+    console.log("対象ファイルが見つかりませんでした。");
+    return;
+  }
+
+  if (options.dryRun) {
+    console.log(`[dry-run] ${plan.length}件のテンプレートを確認します。`);
+    for (const entry of plan) {
+      console.log(
+        `plan  ${entry.relativePath} -> ${entry.name}${entry.municipalityCode ? ` [${entry.municipalityCode}]` : ""}`,
+      );
+    }
+    console.log("");
+    console.log("Summary");
+    console.log(`  planned: ${plan.length}`);
+    console.log("  note: dry-run は DB / Storage に接続しません。既存重複は本登録時に確認します。");
+    return;
+  }
 
   await loadEnvFile(path.join(projectRoot, ".env.local"));
 
@@ -312,17 +386,6 @@ async function main() {
     (municipalities ?? []).map((municipality) => [municipality.code, municipality.id]),
   );
   const uploadedByUserId = adminUserRes.data?.[0]?.id ?? null;
-
-  const files = await collectFiles(sourceRoot);
-  const plan = files
-    .map((filePath) => buildPlanEntry(sourceRoot, filePath))
-    .filter((entry) => !options.category || entry.categoryName === options.category)
-    .filter((entry) => !options.match || entry.relativePath.includes(options.match));
-
-  if (plan.length === 0) {
-    console.log("対象ファイルが見つかりませんでした。");
-    return;
-  }
 
   const existingByKey = new Map();
   for (const template of templatesRes.data ?? []) {

@@ -15,6 +15,7 @@ export type AuditAction =
   | "template.update"
   | "template.deactivate"
   | "document.generate"
+  | "map.coordinate_import"
   | "user.invite"
   | "user.role_change"
   | "user.deactivate"
@@ -23,7 +24,14 @@ export type AuditAction =
 export type AuditInput = {
   userId: string;
   action: AuditAction;
-  entityType: "case" | "person" | "template" | "document" | "user" | "case_person";
+  entityType:
+    | "case"
+    | "person"
+    | "template"
+    | "document"
+    | "user"
+    | "case_person"
+    | "map_coordinate_point";
   entityId?: number | null;
   detail?: Record<string, unknown>;
   ipAddress?: string | null;

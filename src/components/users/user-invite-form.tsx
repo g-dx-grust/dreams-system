@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { useToast } from "@/components/ui/toast";
 import { inviteUser } from "@/server/users";
 
 const Schema = z.object({
@@ -18,8 +19,8 @@ const Schema = z.object({
 type FormValues = z.infer<typeof Schema>;
 
 export function UserInviteForm({ onDone }: { onDone?: () => void }) {
+  const toast = useToast();
   const [serverError, setServerError] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
 
   const {
     register,
@@ -38,21 +39,13 @@ export function UserInviteForm({ onDone }: { onDone?: () => void }) {
       setServerError(res.error);
       return;
     }
-    setDone(true);
+    toast({ message: "招待メールを送信しました", tone: "success" });
     reset();
     onDone?.();
   };
 
-  if (done) {
-    return (
-      <p className="text-s text-success">
-        招待メールを送信しました。ユーザーがメールからアカウントを設定します。
-      </p>
-    );
-  }
-
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-[var(--space-m)]">
+    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-m">
       <Field label="メールアドレス" required error={errors.email?.message}>
         <Input {...register("email")} type="email" placeholder="user@n-grust.co.jp" />
       </Field>
@@ -66,13 +59,18 @@ export function UserInviteForm({ onDone }: { onDone?: () => void }) {
         </Select>
       </Field>
       {serverError && (
-        <p className="text-s text-danger" role="alert">
+        <div
+          className="rounded-s border border-danger bg-danger-soft p-s text-s text-danger"
+          role="alert"
+        >
           {serverError}
-        </p>
+        </div>
       )}
-      <Button type="submit" loading={isSubmitting}>
-        招待メールを送信する
-      </Button>
+      <div className="flex justify-end">
+        <Button type="submit" loading={isSubmitting} loadingLabel="送信中…">
+          招待メールを送信する
+        </Button>
+      </div>
     </form>
   );
 }

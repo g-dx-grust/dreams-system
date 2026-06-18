@@ -1,24 +1,33 @@
 "use client";
 
 import Link from "next/link";
-import { useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   AlertCircle,
+  BookText,
   CheckCircle2,
   ChevronLeft,
   ClipboardCheck,
   FileSpreadsheet,
   FileText,
-  MousePointer2,
   Plus,
   Search,
-  Sparkles,
   Trash2,
   Wand2,
+  X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/components/ui/toast";
 import { suggestTemplateMappings, upsertMappings } from "@/server/templates";
 import type { TemplateMappingRow, TemplatePreview } from "@/server/templates";
 import type {
@@ -172,7 +181,7 @@ function PreviewPanel({
     return (
       <div className="flex h-full min-h-0 flex-col bg-white">
         <PanelHeader
-          icon={<ClipboardCheck size={15} />}
+          icon={<ClipboardCheck size={15} aria-hidden="true" />}
           title="プレビュー"
           description="テンプレートファイルの読み込みに失敗しました。"
           right={<Badge tone="danger">取得失敗</Badge>}
@@ -186,7 +195,7 @@ function PreviewPanel({
     return (
       <div className="flex h-full min-h-0 flex-col bg-white">
         <PanelHeader
-          icon={<ClipboardCheck size={15} />}
+          icon={<ClipboardCheck size={15} aria-hidden="true" />}
           title="プレビュー"
           description="テンプレートファイルのプレビューを作成できませんでした。"
           right={<Badge tone="neutral">未表示</Badge>}
@@ -201,12 +210,14 @@ function PreviewPanel({
     return (
       <div className="flex h-full min-h-0 flex-col bg-white">
         <PanelHeader
-          icon={<FileSpreadsheet size={15} />}
+          icon={<FileSpreadsheet size={15} aria-hidden="true" />}
           title="Excel プレビュー"
           description="セルをクリックすると、中央の選択中マッピングに入ります。"
           right={
             <div className="flex items-center gap-xs">
-              <Badge tone="info">{preview.sheets.length} シート</Badge>
+              <Badge tone="info">
+                <span className="tabular-nums">{preview.sheets.length}</span> シート
+              </Badge>
               {preview.truncated && <Badge tone="warning">一部表示</Badge>}
             </div>
           }
@@ -219,6 +230,7 @@ function PreviewPanel({
                 key={sheet.name}
                 type="button"
                 onClick={() => setSheetIndex(index)}
+                aria-pressed={index === sheetIndex}
                 className={cn(
                   "h-7 shrink-0 rounded-s border px-s text-xs leading-none",
                   index === sheetIndex
@@ -243,7 +255,7 @@ function PreviewPanel({
                   {activeSheet.columns.map((column) => (
                     <th
                       key={column}
-                      className="sticky top-0 z-20 h-7 min-w-[120px] border-b border-r border-border bg-head px-xs text-center font-medium text-text-grey"
+                      className="sticky top-0 z-20 h-7 min-w-[120px] border-b border-r border-border bg-head px-xs text-center font-semibold text-text-grey tabular-nums"
                     >
                       {column}
                     </th>
@@ -253,7 +265,7 @@ function PreviewPanel({
               <tbody>
                 {activeSheet.rows.map((row) => (
                   <tr key={row.number}>
-                    <th className="sticky left-0 z-10 h-9 min-w-10 border-b border-r border-border bg-head px-xs text-right font-medium text-text-grey">
+                    <th className="sticky left-0 z-10 h-9 min-w-10 border-b border-r border-border bg-head px-xs text-right font-semibold text-text-grey tabular-nums">
                       {row.number}
                     </th>
                     {row.cells.map((cell) => {
@@ -275,12 +287,13 @@ function PreviewPanel({
                             type="button"
                             onClick={() => onSelectTarget(target)}
                             aria-label={target}
+                            aria-pressed={isActive}
                             data-cell-target={target}
                             title={`${target}${cell.value ? ` / ${cell.value}` : ""}`}
                             className={cn(
                               "block h-9 w-full px-xs py-xxs text-left transition-colors hover:bg-main-soft",
                               mapped && "bg-success-soft text-success",
-                              isActive && "bg-main-soft text-main ring-2 ring-inset ring-main",
+                              isActive && "bg-main-soft font-medium text-main",
                               !mapped && !isActive && cell.value && "text-text-black",
                               !mapped && !isActive && !cell.value && "text-text-quaternary",
                             )}
@@ -305,13 +318,13 @@ function PreviewPanel({
   return (
     <div className="flex h-full min-h-0 flex-col bg-white">
       <PanelHeader
-        icon={<FileText size={15} />}
+        icon={<FileText size={15} aria-hidden="true" />}
         title="Word プレビュー"
         description="差し込み名をクリックすると、中央の選択中マッピングに入ります。"
         right={
           <div className="flex items-center gap-xs">
             <Badge tone={preview.placeholders.length > 0 ? "info" : "warning"}>
-              差し込み {preview.placeholders.length} 件
+              差し込み <span className="tabular-nums">{preview.placeholders.length}</span> 件
             </Badge>
             {preview.truncated && <Badge tone="warning">一部表示</Badge>}
           </div>
@@ -337,16 +350,16 @@ function PreviewPanel({
                         key={`${part.key}-${index}`}
                         type="button"
                         onClick={() => onSelectTarget(part.key)}
+                        aria-pressed={isActive}
                         className={cn(
-                          "mx-xxs inline-flex min-h-6 max-w-full items-center gap-xxs rounded-s border px-xs align-middle font-mono text-xs transition-colors",
+                          "mx-xxs inline-flex min-h-6 max-w-full items-center rounded-s border px-xs align-middle text-xs transition-colors",
                           mapped
                             ? "border-success bg-success-soft text-success"
                             : "border-main bg-main-soft text-main hover:bg-white",
-                          isActive && "ring-2 ring-main",
+                          isActive && "font-medium",
                         )}
                         title={`{${part.key}}`}
                       >
-                        <MousePointer2 size={12} />
                         <span className="break-all">{part.key}</span>
                       </button>
                     );
@@ -379,7 +392,7 @@ function PanelHeader({
           {icon}
         </span>
         <div className="min-w-0">
-          <p className="truncate text-s font-medium text-text-black">{title}</p>
+          <p className="truncate text-s font-semibold text-text-black">{title}</p>
           {description && <p className="truncate text-xs text-text-grey">{description}</p>}
         </div>
       </div>
@@ -395,6 +408,7 @@ function FieldDictionary({
   fieldCount,
   activeRowNumber,
   onSelectField,
+  onClose,
 }: {
   fieldQuery: string;
   setFieldQuery: (value: string) => void;
@@ -402,18 +416,35 @@ function FieldDictionary({
   fieldCount: number;
   activeRowNumber: number | null;
   onSelectField: (field: FieldEntry) => void;
+  onClose?: () => void;
 }) {
   return (
-    <aside className="flex h-full min-h-0 flex-col bg-white">
+    <aside className="flex h-full min-h-0 flex-col bg-white" aria-label="フィールド辞書">
       <PanelHeader
-        icon={<Search size={15} />}
+        icon={<Search size={15} aria-hidden="true" />}
         title="フィールド辞書"
         description={
           activeRowNumber
             ? `No.${activeRowNumber} に入れる情報を選びます。`
             : "先にプレビューで転記場所を選びます。"
         }
-        right={<Badge tone="neutral">{fieldCount} 件</Badge>}
+        right={
+          <div className="flex items-center gap-xs">
+            <Badge tone="neutral">
+              <span className="tabular-nums">{fieldCount}</span> 件
+            </Badge>
+            {onClose && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex h-7 w-7 items-center justify-center rounded-s text-text-grey hover:bg-grey-7"
+                aria-label="フィールド辞書を閉じる"
+              >
+                <X size={16} aria-hidden="true" />
+              </button>
+            )}
+          </div>
+        }
       />
 
       <div className="shrink-0 border-b border-border px-m py-s">
@@ -421,7 +452,7 @@ function FieldDictionary({
           value={fieldQuery}
           onChange={(e) => setFieldQuery(e.target.value)}
           placeholder="氏名、住所、caseNumber..."
-          className="h-8"
+          aria-label="フィールドを検索"
         />
       </div>
 
@@ -432,7 +463,7 @@ function FieldDictionary({
           <div className="flex flex-col gap-m">
             {filteredGroups.map(({ group, fields }) => (
               <section key={group} className="flex flex-col gap-xs">
-                <p className="text-xs font-medium text-text-grey">{group}</p>
+                <p className="text-xs font-semibold text-text-grey">{group}</p>
                 <div className="flex flex-col gap-xxs">
                   {fields.map((field) => (
                     <button
@@ -444,7 +475,7 @@ function FieldDictionary({
                       <span className="block text-s leading-tight text-text-black">
                         {field.label}
                       </span>
-                      <span className="mt-xxs block break-all font-mono text-xxs leading-tight text-text-grey">
+                      <span className="mt-xxs block break-all text-xxs leading-tight text-text-grey">
                         {field.path}
                       </span>
                     </button>
@@ -486,9 +517,12 @@ function AiSuggestionPanel({
       <div className="flex flex-wrap items-start justify-between gap-s">
         <div className="min-w-0">
           <div className="flex items-center gap-xs">
-            <Sparkles size={15} className="text-main" />
-            <p className="text-s font-medium text-text-black">AIマッピング候補</p>
-            {suggestion && <Badge tone="info">{suggestion.candidates.length} 件</Badge>}
+            <p className="text-s font-semibold text-text-black">AIマッピング候補</p>
+            {suggestion && (
+              <Badge tone="info">
+                <span className="tabular-nums">{suggestion.candidates.length}</span> 件
+              </Badge>
+            )}
           </div>
           <p className="mt-xxs text-xs text-text-grey">
             候補の採用だけでは保存されません。最後に「保存する」で確定します。
@@ -513,7 +547,6 @@ function AiSuggestionPanel({
             loading={suggesting}
             loadingLabel="作成中..."
           >
-            <Sparkles size={14} />
             AIで候補作成
           </Button>
         </div>
@@ -521,7 +554,7 @@ function AiSuggestionPanel({
 
       {suggestionError && (
         <div className="mt-s flex items-start gap-xs rounded-s border border-danger bg-danger-soft p-s text-s text-danger">
-          <AlertCircle size={14} className="mt-xxs shrink-0" />
+          <AlertCircle size={14} className="mt-xxs shrink-0" aria-hidden="true" />
           <span>{suggestionError}</span>
         </div>
       )}
@@ -534,8 +567,8 @@ function AiSuggestionPanel({
 
       {suggestion && suggestion.warnings.length > 0 && (
         <div className="mt-s rounded-s border border-warning bg-warning-soft p-s">
-          <div className="flex items-center gap-xs text-s font-medium text-warning">
-            <AlertCircle size={14} />
+          <div className="flex items-center gap-xs text-s font-semibold text-warning">
+            <AlertCircle size={14} aria-hidden="true" />
             注意
           </div>
           <ul className="mt-xs flex flex-col gap-xxs text-xs leading-relaxed text-text-black">
@@ -578,20 +611,21 @@ function AiSuggestionPanel({
                               : "neutral"
                           }
                         >
-                          信頼度 {confidenceLabel(candidate.confidence)}
+                          信頼度{" "}
+                          <span className="tabular-nums">
+                            {confidenceLabel(candidate.confidence)}
+                          </span>
                         </Badge>
                         {caution && <Badge tone="warning">確認あり</Badge>}
                         {adopted && <Badge tone="success">採用済み</Badge>}
                       </div>
-                      <p className="mt-xs break-all font-mono text-s text-text-black">
+                      <p className="mt-xs break-all text-s text-text-black">
                         {candidate.placeholder}
                       </p>
                       <p className="mt-xxs text-s text-text-black">
                         {knownField?.label ?? candidate.label}
                       </p>
-                      <p className="break-all font-mono text-xxs text-text-grey">
-                        {candidate.fieldPath}
-                      </p>
+                      <p className="break-all text-xxs text-text-grey">{candidate.fieldPath}</p>
                     </div>
 
                     <Button
@@ -607,7 +641,7 @@ function AiSuggestionPanel({
                   <p className="mt-xs text-xs leading-relaxed text-text-grey">{candidate.reason}</p>
                   {candidate.warning && (
                     <p className="mt-xs flex items-start gap-xxs text-xs leading-relaxed text-warning">
-                      <AlertCircle size={12} className="mt-xxs shrink-0" />
+                      <AlertCircle size={12} className="mt-xxs shrink-0" aria-hidden="true" />
                       <span>{candidate.warning}</span>
                     </p>
                   )}
@@ -621,6 +655,106 @@ function AiSuggestionPanel({
   );
 }
 
+function MappingRowList({
+  rows,
+  rowSummaries,
+  activeRowIndex,
+  guide,
+  onSelect,
+  onRemove,
+}: {
+  rows: MappingRow[];
+  rowSummaries: { matchedField?: FieldEntry; status: RowStatus }[];
+  activeRowIndex: number | null;
+  guide: ReturnType<typeof fileTypeGuide>;
+  onSelect: (index: number) => void;
+  onRemove: (index: number) => void;
+}) {
+  if (rows.length === 0) {
+    return (
+      <div className="rounded-s border border-dashed border-border bg-white p-m text-center text-s text-text-grey">
+        マッピング行がありません。
+      </div>
+    );
+  }
+
+  return (
+    <table className="w-full border-collapse text-s">
+      <thead className="sticky top-0 z-10 bg-head">
+        <tr className="border-b border-border">
+          <th className="w-14 px-s py-xs text-left text-xs font-semibold text-text-grey">状態</th>
+          <th className="w-10 px-xs py-xs text-right text-xs font-semibold text-text-grey">No.</th>
+          <th className="px-s py-xs text-left text-xs font-semibold text-text-grey">
+            {guide.placeholderLabel}
+          </th>
+          <th className="px-s py-xs text-left text-xs font-semibold text-text-grey">フィールド</th>
+          <th className="w-9 px-xs py-xs" aria-label="操作" />
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row, index) => {
+          const summary = rowSummaries[index];
+          const status = summary?.status ?? "needsInput";
+          const badge = rowStatusBadge(status);
+          const isActive = activeRowIndex === index;
+
+          return (
+            <tr
+              key={`${row.id ?? "new"}-${index}`}
+              data-selected={isActive || undefined}
+              className={cn(
+                "border-b border-border align-middle",
+                isActive ? "bg-main-soft" : "hover:bg-grey-7",
+              )}
+            >
+              <td className="px-s py-xs">
+                <Badge tone={badge.tone}>{badge.label}</Badge>
+              </td>
+              <td className="px-xs py-xs text-right text-xs text-text-grey tabular-nums">
+                {index + 1}
+              </td>
+              <td className="max-w-0 px-s py-xs">
+                <button
+                  type="button"
+                  onClick={() => onSelect(index)}
+                  aria-pressed={isActive}
+                  className="block w-full truncate text-left text-s text-text-black hover:text-main"
+                >
+                  {row.placeholder || (
+                    <span className="text-text-quaternary">{guide.placeholderLabel}</span>
+                  )}
+                </button>
+              </td>
+              <td className="max-w-0 px-s py-xs">
+                <button
+                  type="button"
+                  onClick={() => onSelect(index)}
+                  aria-pressed={isActive}
+                  className="block w-full truncate text-left text-xs text-text-grey hover:text-main"
+                >
+                  {summary?.matchedField?.label || row.fieldPath || (
+                    <span className="text-text-quaternary">フィールド未選択</span>
+                  )}
+                </button>
+              </td>
+              <td className="px-xs py-xs">
+                <button
+                  type="button"
+                  onClick={() => onRemove(index)}
+                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-s text-text-grey hover:bg-danger-soft hover:text-danger"
+                  aria-label={`No.${index + 1}の行を削除`}
+                >
+                  <Trash2 size={14} aria-hidden="true" />
+                </button>
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
+
 export function MappingEditor({
   templateId,
   templateName,
@@ -631,6 +765,7 @@ export function MappingEditor({
   initialPreview,
   initialPreviewError,
 }: Props) {
+  const toast = useToast();
   const [rows, setRows] = useState<MappingRow[]>(
     initialMappings.map((m) => ({
       id: m.id,
@@ -646,7 +781,9 @@ export function MappingEditor({
   const [suggestionError, setSuggestionError] = useState<string | null>(null);
   const [suggestion, setSuggestion] = useState<TemplateMappingSuggestion | null>(null);
   const [saved, setSaved] = useState(false);
+  const [dirty, setDirty] = useState(false);
   const [fieldQuery, setFieldQuery] = useState("");
+  const [dictOpen, setDictOpen] = useState(false);
   const [activeRowIndex, setActiveRowIndex] = useState<number | null>(
     initialMappings.length > 0 ? 0 : null,
   );
@@ -744,11 +881,16 @@ export function MappingEditor({
     );
   }, [adoptedCandidateKeys, suggestion]);
 
+  function markDirty() {
+    setSaved(false);
+    setDirty(true);
+  }
+
   function addRow() {
     const nextIndex = rows.length;
     setRows((prev) => [...prev, { placeholder: "", fieldPath: "", label: "", isRequired: false }]);
     setActiveRowIndex(nextIndex);
-    setSaved(false);
+    markDirty();
   }
 
   function removeRow(i: number) {
@@ -758,12 +900,12 @@ export function MappingEditor({
       if (prev === i) return null;
       return prev > i ? prev - 1 : prev;
     });
-    setSaved(false);
+    markDirty();
   }
 
   function updateRow<K extends keyof MappingRow>(i: number, key: K, value: MappingRow[K]) {
     setRows((prev) => prev.map((row, idx) => (idx === i ? { ...row, [key]: value } : row)));
-    setSaved(false);
+    markDirty();
   }
 
   function updateFieldPath(i: number, path: string) {
@@ -781,7 +923,7 @@ export function MappingEditor({
         };
       }),
     );
-    setSaved(false);
+    markDirty();
   }
 
   function applyFieldToRow(field: FieldEntry) {
@@ -811,7 +953,7 @@ export function MappingEditor({
     }
 
     setActiveRowIndex(targetIndex);
-    setSaved(false);
+    markDirty();
   }
 
   function applyPreviewTarget(target: string) {
@@ -864,7 +1006,7 @@ export function MappingEditor({
     }
 
     setActiveRowIndex(targetIndex);
-    setSaved(false);
+    markDirty();
   }
 
   function autoFillRows() {
@@ -881,7 +1023,7 @@ export function MappingEditor({
         };
       }),
     );
-    setSaved(false);
+    markDirty();
   }
 
   function removeEmptyRows() {
@@ -889,7 +1031,7 @@ export function MappingEditor({
       prev.filter((row) => row.placeholder.trim() || row.fieldPath.trim() || row.label.trim()),
     );
     setActiveRowIndex(null);
-    setSaved(false);
+    markDirty();
   }
 
   function rowFromCandidate(candidate: TemplateMappingCandidate, current?: MappingRow): MappingRow {
@@ -966,7 +1108,7 @@ export function MappingEditor({
     const applied = applyCandidateToRows(rows, candidate);
     setRows(applied.nextRows);
     setActiveRowIndex(applied.appliedIndex);
-    setSaved(false);
+    markDirty();
     setError(null);
   }
 
@@ -983,7 +1125,7 @@ export function MappingEditor({
 
     setRows(nextRows);
     setActiveRowIndex(firstAppliedIndex);
-    setSaved(false);
+    markDirty();
     setError(null);
   }
 
@@ -1015,9 +1157,12 @@ export function MappingEditor({
       );
       if (!result.ok) {
         setError(result.error);
+        toast({ message: result.error, tone: "danger" });
         return;
       }
       setSaved(true);
+      setDirty(false);
+      toast({ message: "マッピングを保存しました。", tone: "success" });
     } finally {
       setSubmitting(false);
     }
@@ -1032,14 +1177,14 @@ export function MappingEditor({
               href={backHref}
               className="inline-flex h-8 shrink-0 items-center gap-xs rounded-s border border-border bg-white px-s text-s text-text-black hover:bg-grey-7"
             >
-              <ChevronLeft size={15} />
+              <ChevronLeft size={15} aria-hidden="true" />
               詳細
             </Link>
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-s bg-main-soft text-main">
-              <GuideIcon size={16} />
+              <GuideIcon size={16} aria-hidden="true" />
             </span>
             <div className="min-w-0">
-              <h1 className="truncate text-l font-medium leading-tight text-text-black">
+              <h1 className="truncate text-l font-semibold leading-tight text-text-black">
                 {templateName}
               </h1>
               <p className="truncate text-xs text-text-grey">
@@ -1050,30 +1195,14 @@ export function MappingEditor({
 
           <div className="flex flex-wrap items-center gap-xs">
             <Badge tone={unresolvedCount > 0 ? "danger" : "success"}>
-              未設定 {unresolvedCount}
+              未設定 <span className="tabular-nums">{unresolvedCount}</span>
             </Badge>
-            <Badge tone={warningCount > 0 ? "warning" : "success"}>確認 {warningCount}</Badge>
-            <Badge tone="neutral">必須 {requiredCount}</Badge>
-            <Button variant="secondary" size="sm" onClick={autoFillRows}>
-              <Wand2 size={14} />
-              自動補完
-            </Button>
-            <Button variant="secondary" size="sm" onClick={removeEmptyRows}>
-              空行整理
-            </Button>
-            <Button variant="secondary" size="sm" onClick={addRow}>
-              <Plus size={14} />
-              行追加
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={handleSave}
-              loading={submitting}
-              loadingLabel="保存中..."
-            >
-              保存する
-            </Button>
+            <Badge tone={warningCount > 0 ? "warning" : "success"}>
+              確認 <span className="tabular-nums">{warningCount}</span>
+            </Badge>
+            <Badge tone="neutral">
+              必須 <span className="tabular-nums">{requiredCount}</span>
+            </Badge>
           </div>
         </div>
 
@@ -1085,28 +1214,21 @@ export function MappingEditor({
                 unresolvedCount > 0 || warningCount > 0 ? "bg-warning" : "bg-success",
               )}
               style={{ width: `${progress}%` }}
+              role="progressbar"
+              aria-valuenow={progress}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="マッピング完了率"
             />
           </div>
-          <p className="shrink-0 text-xs text-text-grey">
+          <p className="shrink-0 text-xs text-text-grey tabular-nums">
             {completedCount} / {rows.length} 件完了（{progress}%）
           </p>
-          {saved && (
-            <p className="flex shrink-0 items-center gap-xxs text-xs text-success">
-              <CheckCircle2 size={13} />
-              保存済み
-            </p>
-          )}
-          {error && (
-            <p className="flex min-w-0 items-center gap-xxs text-xs text-danger">
-              <AlertCircle size={13} />
-              <span className="truncate">{error}</span>
-            </p>
-          )}
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 bg-background xl:grid-cols-[minmax(520px,1fr)_430px_340px]">
-        <section className="min-h-[460px] min-w-0 overflow-hidden border-b border-border xl:min-h-0 xl:border-b-0 xl:border-r">
+      <div className="grid min-h-0 flex-1 grid-cols-1 bg-background lg:grid-cols-[minmax(0,1fr)_minmax(360px,430px)] xl:grid-cols-[minmax(0,1fr)_minmax(360px,430px)_340px]">
+        <section className="min-h-[360px] min-w-0 overflow-hidden border-b border-border lg:min-h-0 lg:border-b-0 lg:border-r">
           <PreviewPanel
             preview={initialPreview}
             previewError={initialPreviewError}
@@ -1116,13 +1238,33 @@ export function MappingEditor({
           />
         </section>
 
-        <section className="flex min-h-[460px] min-w-0 flex-col overflow-hidden border-b border-border bg-grey-5 xl:min-h-0 xl:border-b-0 xl:border-r">
-          <PanelHeader
-            icon={<ClipboardCheck size={15} />}
-            title="マッピング"
-            description={guide.targetHelp}
-            right={activeRowNumber ? <Badge tone="info">No.{activeRowNumber}</Badge> : null}
-          />
+        <section className="flex min-h-[420px] min-w-0 flex-col overflow-hidden border-b border-border bg-grey-5 lg:min-h-0 lg:border-b-0 xl:border-r">
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-s border-b border-border bg-white px-m py-s">
+            <div className="flex min-w-0 items-center gap-s">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-s bg-grey-7 text-text-grey">
+                <ClipboardCheck size={15} aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <p className="truncate text-s font-semibold text-text-black">マッピング</p>
+                <p className="truncate text-xs text-text-grey">{guide.targetHelp}</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-xs">
+              {activeRowNumber ? (
+                <Badge tone="info">
+                  No.<span className="tabular-nums">{activeRowNumber}</span>
+                </Badge>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => setDictOpen(true)}
+                className="inline-flex h-7 items-center gap-xs rounded-s border border-border bg-white px-s text-s text-text-black hover:bg-grey-7 xl:hidden"
+              >
+                <BookText size={14} aria-hidden="true" />
+                辞書
+              </button>
+            </div>
+          </div>
 
           <AiSuggestionPanel
             suggestion={suggestion}
@@ -1152,7 +1294,7 @@ export function MappingEditor({
                         }
                       }}
                       placeholder={guide.placeholderHint}
-                      className="h-8 text-s"
+                      className="text-s"
                     />
                   </label>
 
@@ -1166,7 +1308,7 @@ export function MappingEditor({
                         if (found) updateFieldPath(activeRowIndex, found.path);
                       }}
                       placeholder="右の辞書から選択"
-                      className="h-8 text-s"
+                      className="text-s"
                     />
                   </label>
                 </div>
@@ -1178,16 +1320,14 @@ export function MappingEditor({
                       value={activeRow.label}
                       onChange={(e) => updateRow(activeRowIndex, "label", e.target.value)}
                       placeholder={fieldLabel(activeRow.fieldPath || activeRow.placeholder)}
-                      className="h-8 text-s"
+                      className="text-s"
                     />
                   </label>
 
                   <label className="mb-xs inline-flex items-center gap-xs text-xs text-text-grey">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={activeRow.isRequired}
                       onChange={(e) => updateRow(activeRowIndex, "isRequired", e.target.checked)}
-                      className="rounded"
                     />
                     必須
                   </label>
@@ -1202,13 +1342,13 @@ export function MappingEditor({
                   </span>
                   {activeSummary?.isDuplicate && (
                     <span className="flex items-center gap-xxs text-xs text-danger">
-                      <AlertCircle size={12} />
+                      <AlertCircle size={12} aria-hidden="true" />
                       同じ転記先があります
                     </span>
                   )}
                   {activeSummary?.isUnknownField && (
                     <span className="flex items-center gap-xxs text-xs text-warning">
-                      <AlertCircle size={12} />
+                      <AlertCircle size={12} aria-hidden="true" />
                       辞書未登録のパスです
                     </span>
                   )}
@@ -1221,73 +1361,38 @@ export function MappingEditor({
             )}
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto p-s">
-            {rows.length === 0 ? (
-              <div className="rounded-s border border-dashed border-border bg-white p-m text-center text-s text-text-grey">
-                マッピング行がありません。
-              </div>
-            ) : (
-              <div className="flex flex-col gap-xs">
-                {rows.map((row, index) => {
-                  const summary = rowSummaries[index];
-                  const status = summary?.status ?? "needsInput";
-                  const badge = rowStatusBadge(status);
-                  const isActive = activeRowIndex === index;
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-s border-b border-border bg-white px-m py-xs">
+            <p className="text-xs text-text-grey">
+              全<span className="tabular-nums">{rows.length}</span>件
+            </p>
+            <div className="flex flex-wrap items-center gap-xs">
+              <Button variant="secondary" size="sm" onClick={autoFillRows}>
+                <Wand2 size={14} aria-hidden="true" />
+                自動補完
+              </Button>
+              <Button variant="secondary" size="sm" onClick={removeEmptyRows}>
+                空行整理
+              </Button>
+              <Button variant="secondary" size="sm" onClick={addRow}>
+                <Plus size={14} aria-hidden="true" />
+                行追加
+              </Button>
+            </div>
+          </div>
 
-                  return (
-                    <div
-                      key={`${row.id ?? "new"}-${index}`}
-                      className={cn(
-                        "rounded-s border bg-white p-s transition-colors hover:border-main hover:bg-main-soft",
-                        isActive ? "border-main ring-2 ring-main/20" : "border-border",
-                      )}
-                    >
-                      <div className="flex items-start justify-between gap-s">
-                        <button
-                          type="button"
-                          onClick={() => setActiveRowIndex(index)}
-                          className="min-w-0 flex-1 text-left"
-                        >
-                          <div className="flex items-center gap-xs">
-                            <Badge tone={badge.tone}>{badge.label}</Badge>
-                            <span className="text-xs text-text-grey">No.{index + 1}</span>
-                          </div>
-                          <p className="mt-xs truncate font-mono text-s text-text-black">
-                            {row.placeholder || guide.placeholderLabel}
-                          </p>
-                          <p className="truncate text-xs text-text-grey">
-                            {summary?.matchedField?.label || row.fieldPath || "フィールド未選択"}
-                          </p>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            removeRow(index);
-                          }}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter" || event.key === " ") {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              removeRow(index);
-                            }
-                          }}
-                          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-s text-text-grey hover:bg-danger-soft hover:text-danger"
-                          title="行を削除"
-                          aria-label={`No.${index + 1}の行を削除`}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+          <div className="min-h-0 flex-1 overflow-y-auto bg-white">
+            <MappingRowList
+              rows={rows}
+              rowSummaries={rowSummaries}
+              activeRowIndex={activeRowIndex}
+              guide={guide}
+              onSelect={setActiveRowIndex}
+              onRemove={removeRow}
+            />
           </div>
         </section>
 
-        <section className="min-h-[460px] min-w-0 overflow-hidden xl:min-h-0">
+        <section className="hidden min-w-0 overflow-hidden xl:block">
           <FieldDictionary
             fieldQuery={fieldQuery}
             setFieldQuery={setFieldQuery}
@@ -1297,6 +1402,97 @@ export function MappingEditor({
             onSelectField={applyFieldToRow}
           />
         </section>
+      </div>
+
+      <FieldDictionaryDrawer open={dictOpen} onClose={() => setDictOpen(false)}>
+        <FieldDictionary
+          fieldQuery={fieldQuery}
+          setFieldQuery={setFieldQuery}
+          filteredGroups={filteredGroups}
+          fieldCount={fieldCount}
+          activeRowNumber={activeRowNumber}
+          onSelectField={(field) => {
+            applyFieldToRow(field);
+            setDictOpen(false);
+          }}
+          onClose={() => setDictOpen(false)}
+        />
+      </FieldDictionaryDrawer>
+
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-s border-t border-border bg-white px-m py-s pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+        <div className="flex min-w-0 flex-wrap items-center gap-s text-xs">
+          {error ? (
+            <span className="flex min-w-0 items-center gap-xxs text-danger">
+              <AlertCircle size={13} aria-hidden="true" />
+              <span className="truncate">{error}</span>
+            </span>
+          ) : saved && !dirty ? (
+            <span className="flex items-center gap-xxs text-success">
+              <CheckCircle2 size={13} aria-hidden="true" />
+              保存済み
+            </span>
+          ) : dirty ? (
+            <span className="text-text-grey">未保存の変更があります</span>
+          ) : (
+            <span className="text-text-grey">変更はありません</span>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-s">
+          <Link
+            href={backHref}
+            className="inline-flex h-8 shrink-0 items-center rounded-s border border-border bg-white px-m text-s text-text-black hover:bg-grey-7"
+          >
+            キャンセル
+          </Link>
+          <Button
+            variant="primary"
+            onClick={handleSave}
+            loading={submitting}
+            loadingLabel="保存中..."
+          >
+            保存する
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FieldDictionaryDrawer({
+  open,
+  onClose,
+  children,
+}: {
+  open: boolean;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[300] flex justify-end xl:hidden"
+      style={{ background: "var(--color-scrim)" }}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="フィールド辞書"
+        className="flex h-full w-full max-w-[420px] flex-col bg-white shadow-m"
+      >
+        {children}
       </div>
     </div>
   );

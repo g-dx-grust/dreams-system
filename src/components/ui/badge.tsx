@@ -7,7 +7,7 @@ import { cn } from "@/lib/cn";
  * 色は G-DX トークンの範囲のみ使用する。
  */
 const badgeVariants = cva(
-  "inline-flex h-[22px] items-center whitespace-nowrap rounded-s px-xs text-xs font-semibold leading-none",
+  "inline-flex h-5 items-center whitespace-nowrap rounded-s px-xs text-xs font-semibold leading-none",
   {
     variants: {
       tone: {

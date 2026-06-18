@@ -214,3 +214,72 @@ textarea {
     animation-duration: 1.6s;
   }
 }
+
+/* ==== Toast (下から 8px フェードイン) ==== see: DESIGN.md §9.5 */
+@keyframes ui-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ui-toast {
+  animation: ui-toast-in 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-toast {
+    animation-duration: 0.01ms;
+  }
+}
+
+/* ==== Navigation progress (遷移時の上部2pxバー) ==== see: DESIGN.md §9.3 */
+@keyframes ui-navprogress {
+  0% {
+    width: 0;
+    opacity: 1;
+  }
+  90% {
+    width: 90%;
+    opacity: 1;
+  }
+  100% {
+    width: 96%;
+    opacity: 1;
+  }
+}
+
+.ui-navprogress {
+  position: fixed;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  z-index: 400;
+  height: 2px;
+  background-color: var(--color-main);
+  animation: ui-navprogress 2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* ==== Skip link (キーボードで本文へ) ==== see: DESIGN.md §10 */
+.ui-skip-link {
+  position: fixed;
+  inset-block-start: var(--spacing-s);
+  inset-inline-start: var(--spacing-s);
+  z-index: 401;
+  transform: translateY(-200%);
+  border-radius: var(--radius-s);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-m);
+  padding: var(--spacing-s) var(--spacing-m);
+  font-size: var(--text-s);
+  color: var(--color-text-black);
+  transition: transform 0.15s ease-out;
+}
+
+.ui-skip-link:focus {
+  transform: translateY(0);
+}

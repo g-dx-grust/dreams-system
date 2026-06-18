@@ -34,6 +34,8 @@ export type PersonRow = {
 export type ListPersonsParams = {
   q?: string;
   personType?: "individual" | "corporation";
+  sort?: string;
+  order?: string;
   page?: number;
   perPage?: number;
 };
@@ -46,12 +48,22 @@ export async function listPersons(params: ListPersonsParams = {}): Promise<
   const page = Math.max(1, params.page ?? 1);
   const perPage = Math.min(100, Math.max(1, params.perPage ?? 20));
 
-  const { data, error } = await supabase.rpc("list_persons_safe", {
+  const personSortKeys = ["person_type", "name", "name_kana", "role", "updated"] as const;
+  const sortKey =
+    params.sort && (personSortKeys as readonly string[]).includes(params.sort) ? params.sort : null;
+  const sortOrder = params.order === "desc" ? "desc" : "asc";
+
+  // p_sort/p_order はソート指定時のみ渡す。マイグレーション 0015 未適用でも
+  // 既定一覧（ソートなし）は旧シグネチャで動作し続ける。
+  const rpcArgs = {
     p_q: params.q?.trim() || null,
     p_person_type: params.personType ?? null,
     p_limit: perPage,
     p_offset: (page - 1) * perPage,
-  });
+    ...(sortKey ? { p_sort: sortKey, p_order: sortOrder } : {}),
+  };
+
+  const { data, error } = await supabase.rpc("list_persons_safe", rpcArgs);
   if (error) return fail("取得に失敗しました。時間をおいて再度お試しください。");
 
   const rows = (data ?? []) as Array<PersonRow & { total_count?: number | string | null }>;

@@ -144,14 +144,25 @@ Tailwind では `gap-m`, `p-l`, `space-y-l` のように使う。
 最大幅 `--width-content-max` (1200px) を中央寄せ。情報密度を保つため、
 **ダッシュボード本体の外周パディングは 16px**（p-m）で固定する。
 
-### 4.3 固定寸法
+### 4.3 固定寸法・コントロール高（密度型の単一基準）
 
 ```
-ヘッダー         h-14   (56px) ← --height-app-header
-サイドナブ       w-60   (240px) ← --width-side-nav
-タッチターゲット  min-h-[36px] （業務UI ではタッチより密度を優先）
-スマホタッチ     min-h-[44px] （モバイル時のみ）
+ヘッダー              h-14  (56px)  ← --height-app-header
+サイドナブ            w-60  (240px) ← --width-side-nav
 ```
+
+**インタラクティブ要素の高さは以下の3段に統一する**（§8.1 ボタン / §8.2 入力欄 と一致させ、
+フィルタバーやフォーム末尾でボタンと入力欄の高さがズレないようにする）。
+
+```
+sm  h-7  (28px)  ← テーブル行内アクション
+md  h-8  (32px)  ← 標準。Input / Select / Textarea(単一行) / 既定ボタン / フィルタバー
+lg  h-10 (40px)  ← モーダルのプライマリ、主要CTA
+```
+
+- デスクトップのタッチtarget下限は **32px (h-8)**（業務密度をタッチ余白より優先）。
+- モバイル（< md）では主要操作を **min-h-[44px]** に拡張する。
+- 旧 §4.3 の「タッチターゲット 36px」は密度型方針により **32px (h-8) に改訂**。Input を h-9 で実装していた箇所は h-8 に揃える。
 
 ---
 
@@ -239,48 +250,64 @@ lg: h-10 px-l   text-m     ← モーダルのプライマリ
 ### 8.2 入力欄
 
 ```
-標準  h-8 rounded-s border border-border bg-white px-s text-m
+標準  h-8 rounded-s border border-border bg-white px-s text-m   ← 単一行は §4.3 md(h-8) に統一
 focus border-main + box-shadow: var(--shadow-outline-focus)
-error border-danger + 下に text-xs text-danger でメッセージ
+error aria-invalid="true" のとき border-danger（focus時 ring も danger）+ 下に text-xs text-danger
 disabled bg-grey-7 text-text-disabled
 ```
 
-- placeholder は **入力例**のみ。ラベル代わりに使わない
+- placeholder は **入力例**のみ。ラベル代わりに使わない。色は `text-text-quaternary`（#8F959E）。
+  `text-text-disabled`（#C0C4CC）はコントラスト約1.7:1で AA 未達のため placeholder に使わない
 - ラベルは入力欄の上に常時表示（`text-s text-text-grey`）
 - 必須表示は **ラベル末尾の小さな `*`** で。色は `text-danger`、サイズ `text-xs`
+- **エラー連動（必須）**: Input / Select / Textarea は `aria-invalid` を受け取り、true のとき枠を
+  `border-danger` にする。`Field` は `useId()` で id を生成し子要素へ `id` / `aria-describedby`
+  （hint・error）/ `aria-invalid` を自動注入する。ラベルクリックでフォーカスが移ること
+- Select の矢印 SVG は `stroke` をトークン外 HEX 直書きせず `currentColor` 相当で表現する
 
 ### 8.3 カード
 
 ```tsx
 <div className="rounded-m border border-border bg-white">
-  <div className="border-b border-border px-l py-m">
-    <h2 className="text-m font-medium">セクション名</h2>
+  <div className="border-b border-border px-m py-m">
+    <h2 className="text-l font-semibold">セクション名</h2>
   </div>
-  <div className="p-l">{/* 中身 */}</div>
+  <div className="p-m">{/* 中身 */}</div>
 </div>
 ```
 
+- カードのパディングは **`p-m`（16px）に統一**（§4.2 と一致）。`p-l`（24px）はモーダル等の限定箇所のみ
 - カード背景は **白固定**。色をつけて目立たせない
 - 影は使わない（`border` で十分）
 - ヘッダーとボディの区切りは下線 1px のみ
 
-### 8.4 テーブル
+### 8.4 テーブル（会計SaaS密度型の中核）
 
-業務システムの中核。情報密度を最優先。
+業務システムの中核。**情報密度と「捌く速さ」を最優先**。
+反復データ（案件・関係者・土地の筆・帳票履歴・監査ログ等）は原則 **1 件 = 1 行のテーブル**で表示し、
+分離カード型（行間に余白＋影）にしない（§11 参照）。
 
 ```
-ヘッダー   bg-head text-xs font-medium text-text-grey   (#F5F6F7)
+ヘッダー   bg-head text-s font-semibold text-text-grey   (#F5F6F7)
 セル       px-m py-s text-m
 行         border-b border-border
-hover      hover:bg-grey-7
+hover      hover:bg-grey-7          ← bg-column(#FAFBFC) は白とほぼ同色で不可
 selected   bg-main-soft  (#F0F4FF)
-数値列     text-right tabular-nums
+数値列     text-right tabular-nums whitespace-nowrap
 ```
 
-- ヘッダ行は背景グレー、ボーダーは下に 1px のみ
-- 縦罫線（`border-x`）は使わない
-- ソート可能列はヘッダにキャレット（`lucide-react` の `ChevronUp/Down`）
-- 行数値は **tabular-nums** で桁を揃える
+**密度型テーブルが備える標準機能（一覧の必須要件）:**
+
+- **固定ヘッダ**: スクロール領域で `thead` を `sticky top-0 z-10`（`bg-head` 既存）。長い一覧で見出しを見失わない
+- **列ソート**: ソート可能 TH はクリックで昇降トグル。`lucide-react` の `ChevronUp/Down`（未ソート時は薄い `ChevronsUpDown`）。
+  サーバ側は `p_sort` / `p_order` 引数で受ける
+- **一括選択**: 先頭に固定幅のチェック列（ヘッダ＝全選択／部分選択 indeterminate）。選択行は `bg-main-soft`。
+  選択中は上部に「N件を選択中」＋一括アクションバーを出す
+- **件数の常時表示**: テーブル上部に「全N件」を**常時**表示（totalPages>1 等で出し分けない）。0件時も「全0件」
+- **行内アクション**: 行末にケバブ（`MoreVertical`）または小ボタン（sm h-7）。主要操作を1〜2個直置き＋残りはメニュー
+- **既定の並び**: 一覧の目的に沿った既定ソートを置く（未入金=金額/経過日数の降順、帳票履歴=生成日時の降順 等）
+- 縦罫線（`border-x`）は使わない。ボーダーは行の下 1px のみ
+- 数値・金額・日数・日付・連番は **tabular-nums** で桁を揃え、`font-mono` の個別指定はしない
 
 ### 8.5 バッジ・ステータス
 
@@ -298,30 +325,108 @@ Danger      bg-danger-soft text-danger
 
 ### 8.6 ナビゲーション
 
-#### AppHeader（白ベース）
+#### AppHeader（白ベース・**常設する**）
+
+**方針確定（2026-06）**: AppHeader は**採用**し、`(dashboard)/layout.tsx` で常設する
+（コンテンツ領域＝サイドナブの右側の最上部に固定）。デッドコード化していた実装を復活させる。
 
 ```
 背景      bg-white border-b border-border
-高さ      h-14 (56px)
-ロゴ      左寄せ。文字は text-m font-medium text-text-black
-ユーザー   右寄せ。ログアウトは Secondary ボタン (sm)
+高さ      h-14 (56px) ← --height-app-header
+左        モバイル時ハンバーガー → パンくず（§13.1）＋ 現在ページタイトル
+右        ページアクションスロット（任意）＋ ユーザー名 ＋ ログアウト(Secondary sm)
 ```
 
-濃紺ヘッダーは廃止。ヘッダーが「画面で一番強い要素」にならないようにする。
+- **現在地・ユーザー情報の正は AppHeader**。サイドナブを畳んでも常に見えるようにする
+  （サイドナブ下部のユーザーブロックは重複のため撤去または最小化）
+- ロゴはサイドナブ上部に置く。AppHeader にはロゴを重複させない
+- 濃紺ヘッダーは廃止。ヘッダーが「画面で一番強い要素」にならないよう、白＋下境界線のみ
+- ページタイトル・主要アクションは AppHeader / PageHeader のスロットに集約し、各画面でバラバラに描かない
 
 #### サイドナブ
 
 ```
 背景        bg-white border-r border-border
 幅          240px (--width-side-nav)
-グループラベル text-xs text-text-quaternary uppercase tracking-wider
-リンク非活性   text-text-black hover:bg-grey-7
-リンク活性     bg-main-soft text-main  ← 唯一の青
-アイコン       h-4 w-4 lucide-react
+ロゴ         上部に wordmark（チャコールの mark＋"dreaMs"＋小さなサブタイトル）
+グループラベル text-xs font-medium text-text-quaternary（短い日本語。uppercase/tracking は使わない）
+リンク非活性   font-medium text-text-black hover:bg-grey-7
+リンク活性     bg-main-soft font-semibold text-main ＋ 左 3px の bg-main バー
+アイコン       h-[18px] w-[18px] lucide-react（活性時 strokeWidth 2.25）
 ```
 
-活性インジケータは **左 2px の `bg-main` バー** または `bg-main-soft` の塗り、どちらか統一。
-両方併用しない。
+活性インジケータは **左 3px の `bg-main` バー ＋ `bg-main-soft` の淡い面**（洗練ホワイト案で採用）。
+左バーは `rounded-r-full`、項目は `relative`／`min-h-10`。装飾過多にならない範囲でこの2点併用を可とする。
+
+**レスポンシブ・状態保持（密度型で追加）:**
+
+- **`lg` 以上**: 固定表示。展開(240px)/折りたたみ(72px アイコンのみ)をトグルできる
+- **`lg` 未満**: 画面外に退避し、AppHeader 左の**ハンバーガー**で**オーバーレイドロワー**として開閉
+  （`scrim` + `shadow-m`、`Esc`・スクリム押下で閉じる）。本文を常時 240px 奪わない
+- **折りたたみ状態は cookie に永続化**し、初期描画から復元する（SSR と初期値の不一致による
+  hydration mismatch を避けるため、サーバ側で初期幅を確定させる）
+- **活性判定はセグメント境界一致**: `pathname === href || pathname.startsWith(href + "/")`。
+  単純な前方一致（`startsWith(href)`）は兄弟ルートで誤活性するため使わない
+- 折りたたみ時のラベル補助は `title` 属性に頼らず、`shadow-s` の Tooltip で hover/focus 即時表示
+- アイコンは縮小（折りたたみ）時も判別できる、意味の明確に異なるものを選ぶ
+- `<aside>` / `<nav>` に `aria-label` を付与し landmark を区別する
+
+### 8.7 パンくず（Breadcrumb）
+
+深い階層（案件 → 関係者 → 土地 → 帳票）で現在地と戻り導線を示す。AppHeader 左に置く。
+
+```
+区切り    lucide-react ChevronRight（h-4 w-4 text-text-quaternary）
+各階層    text-s。リンクは text-text-grey（hover で text-text-black）、現在地は text-text-black
+最大段数  4 段まで。超える場合は先頭ホームの次を「…」に省略
+ホーム    先頭は Home アイコン or「ダッシュボード」
+```
+
+- 末尾（現在地）はリンクにしない。`aria-current="page"`
+- パンくずはシェル（AppHeader）が一元提供し、各ページはタイトル/階層データを渡すだけ
+
+### 8.8 フィルタバー（常設・即時・チップ）
+
+一覧の絞り込みは「絞り込む」ボタン送信の全リロードにしない。**選択即時反映**を基本とする。
+
+```
+配置     テーブル直上に常設。左にキーワード/Select 群、右に件数「全N件」
+即時反映  Select・チェックは onChange で即適用（URL query を更新）。キーワードは
+         デバウンス（約300ms）後に適用
+件数      常時「全N件」を表示（絞り込み結果が即わかる）
+```
+
+- **適用中フィルタのチップ**: 適用された条件を行下にチップで可視化（`bg-grey-7 text-text-grey`、
+  各チップに×で個別解除）。複数あるときは「すべて解除」を併置
+- フィルタが空のときはチップ行を出さない
+
+### 8.9 確認モーダル（ConfirmDialog）
+
+**破壊的・確定的操作（削除・無効化・権限変更・再同期）は必ずアプリ内モーダルで確認**する。
+`window.confirm` はブランド分断・スタイル不能のため使わない。
+
+```
+構造    scrim(--color-scrim) + 中央ダイアログ（rounded-l border shadow-m bg-white、最大 480px）
+本文    「何が起きるか」＋**対象を明示**（例: ユーザー『山田 太郎』を無効化します）
+ボタン   右下に [キャンセル(Secondary)] [実行(Danger or Primary)]。実行は loading 対応
+```
+
+- 取り返しのつかない操作は実行ボタンを Danger に
+- 確認モーダルは破壊操作に限定し、通常保存に多用しない（ステップ増を避ける）
+- フォーカストラップ・`Esc` で閉じる・開いたら実行ボタンにフォーカス
+
+### 8.10 固定保存バー（StickySaveBar）
+
+項目数の多いフォーム（案件・関係者・金額・マッピング）は、長スクロールで保存導線を見失わないよう
+**下部に固定の保存バー**を置く。
+
+```
+配置    フォーム下端に sticky bottom-0。bg-white border-t border-border、上に薄い shadow（任意）
+中身    左に補助情報（未保存の変更あり 等）、右に [キャンセル(Secondary)] [保存する(Primary, loading対応)]
+```
+
+- 1 フォーム 1 プライマリ（§8.1）。保存バー内のプライマリは 1 つ
+- モバイルでは `env(safe-area-inset-bottom)` を考慮
 
 ---
 
@@ -369,6 +474,15 @@ Danger      bg-danger-soft text-danger
 ```
 
 トーストは **同時に 1 つまで**。連続発火する場合は最新のものに置き換える。
+
+**発火条件（出す／出さない）:**
+
+- 出す: サーバ保存・削除・帳票生成・招待など**非同期の確定/失敗**（「保存しました」「生成しました」）
+- 出す: 画面遷移を伴わない更新で、結果が画面上すぐ見えないとき
+- 出さない: 入力バリデーションエラー（→ 該当フィールド下の赤文字。§9.2）
+- 出さない: 遷移先の画面自体が結果を示す場合（二重告知を避ける）
+- トーストは「静かな確定感」の最後の一押し。多発させない（§11）
+- 実装は ToastProvider（context）＋ `useToast()` を基盤に置き、各操作から呼ぶ
 
 ### 9.6 フォーカス
 
@@ -419,5 +533,6 @@ Danger      bg-danger-soft text-danger
 
 | 日付 | 変更内容 |
 |---|---|
+| 2026-06-02 | 会計SaaS密度型リファイン。全画面監査（137件）を受け、コントロール高を h-8 に統一(§4.3)、入力のエラー/aria-invalid連動(§8.2)、カードを p-m に統一(§8.3)、密度型テーブルの必須機能=固定ヘッダ/列ソート/一括選択/件数常時/行内アクション(§8.4)、AppHeader を常設に確定しパンくず・ユーザーをヘッダ集約(§8.6)、サイドナブのレスポンシブdrawer・cookie永続化・セグメント境界活性(§8.6)、パンくず(§8.7)/フィルタチップ(§8.8)/確認モーダル(§8.9)/固定保存バー(§8.10)を新設、トースト発火条件(§9.5)を明文化。計画の単一ソースは `docs/uiux-redesign-plan.md` |
 | 2026-05-03 | Lark-inspired refresh。Primary を `#3370FF`、ヘッダを白ベース、weight を 400/500 に統一。dreaMs 限定の例外として宣言 |
 | (それ以前) | 初版（GRUST_BLUE / GRUST_NAVY 準拠） |
