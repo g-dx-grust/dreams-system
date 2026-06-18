@@ -35,9 +35,7 @@ const EMPTY_PARCEL: ParcelContext = {
   tenyoArea: "",
 };
 
-function buildTransferContext(
-  overrides: Partial<TransferContext> = {},
-): TransferContext {
+function buildTransferContext(overrides: Partial<TransferContext> = {}): TransferContext {
   return {
     caseNumber: "2026-FC-001",
     caseName: "農地転用",
@@ -73,10 +71,7 @@ function buildTransferContext(
 }
 
 function escapeXmlText(input: string): string {
-  return input
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
+  return input.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
 
 function createDocxTemplate(text: string): ArrayBuffer {
@@ -120,7 +115,14 @@ function extractDocumentText(buffer: Buffer): string {
   const zip = new PizZip(buffer);
   const xml = zip.file("word/document.xml")?.asText() ?? "";
 
-  return xml.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+  return xml
+    .replace(/<[^>]+>/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractDocumentXml(buffer: Buffer): string {
+  return new PizZip(buffer).file("word/document.xml")?.asText() ?? "";
 }
 
 describe("fillDocx", () => {
@@ -170,9 +172,7 @@ describe("fillDocx", () => {
   });
 
   it("ループ内でも親スコープの値を引き継げる", () => {
-    const template = createDocxTemplate(
-      "申請者:{#applicants}{name}-{caseNumber};{/applicants}",
-    );
+    const template = createDocxTemplate("申請者:{#applicants}{name}-{caseNumber};{/applicants}");
     const context = buildTransferContext({
       applicants: [
         { ...EMPTY_PERSON, name: "田中太郎" },
@@ -184,5 +184,38 @@ describe("fillDocx", () => {
     const text = extractDocumentText(rendered);
 
     expect(text).toContain("申請者:田中太郎-2026-FC-001;佐藤花子-2026-FC-001;");
+  });
+
+  it("旧Word変換由来の非標準OOXML名を生成時に補正する", () => {
+    const zip = new PizZip(createDocxTemplate("{today}"));
+    zip.file(
+      "word/document.xml",
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p>
+      <w:pPr><w:ind w:first-line="720"/></w:pPr>
+      <w:r><w:rPr><w:sz-cs w:val="21"/></w:rPr><w:t>{today}</w:t></w:r>
+    </w:p>
+    <w:sectPr/>
+  </w:body>
+</w:document>`,
+    );
+
+    const rendered = fillDocx(
+      zip.generate({ type: "arraybuffer", compression: "DEFLATE" }) as ArrayBuffer,
+      buildTransferContext(),
+      false,
+    );
+    const outputZip = new PizZip(rendered);
+    const xml = extractDocumentXml(rendered);
+
+    expect(xml).toContain("令和8年4月24日");
+    expect(xml).toContain('<w:szCs w:val="21"/>');
+    expect(xml).toContain('w:firstLine="720"');
+    expect(xml).not.toContain("w:sz-cs");
+    expect(xml).not.toContain("w:first-line");
+    expect(Object.keys(outputZip.files)[0]).toBe("[Content_Types].xml");
+    expect(Object.values(outputZip.files).some((file) => file.dir)).toBe(false);
   });
 });

@@ -10,6 +10,16 @@ type ParserContext = {
   scopeList: unknown[];
 };
 
+const DOCX_PACKAGE_ORDER = [
+  "[Content_Types].xml",
+  "_rels/.rels",
+  "docProps/core.xml",
+  "docProps/app.xml",
+  "docProps/meta.xml",
+  "word/_rels/document.xml.rels",
+  "word/document.xml",
+];
+
 function buildMappingLookup(mappings: Mapping[]): Map<string, string> {
   const lookup = new Map<string, string>();
 
@@ -83,6 +93,42 @@ function createTransferParser(mappingLookup: Map<string, string>) {
   };
 }
 
+function normalizeTextutilWordXml(xml: string) {
+  return xml.replace(/\bw:sz-cs\b/g, "w:szCs").replace(/\bw:first-line\b/g, "w:firstLine");
+}
+
+function normalizeWordXmlParts(zip: PizZip) {
+  for (const fileName of Object.keys(zip.files)) {
+    const file = zip.files[fileName];
+    if (!file || file.dir || !/^word\/.+\.xml$/u.test(fileName)) continue;
+
+    const xml = file.asText();
+    const normalized = normalizeTextutilWordXml(xml);
+    if (normalized !== xml) {
+      zip.file(fileName, normalized);
+    }
+  }
+}
+
+function generateDocxPackage(zip: PizZip): Buffer {
+  const output = new PizZip();
+  const fileNames = Object.keys(zip.files).filter((fileName) => !zip.files[fileName]?.dir);
+  const orderedFileNames = [
+    ...DOCX_PACKAGE_ORDER.filter((fileName) => fileNames.includes(fileName)),
+    ...fileNames
+      .filter((fileName) => !DOCX_PACKAGE_ORDER.includes(fileName))
+      .sort((a, b) => a.localeCompare(b)),
+  ];
+
+  for (const fileName of orderedFileNames) {
+    const file = zip.files[fileName];
+    if (!file || file.dir) continue;
+    output.file(fileName, file.asNodeBuffer());
+  }
+
+  return output.generate({ type: "nodebuffer", compression: "DEFLATE" }) as Buffer;
+}
+
 export function fillDocx(
   templateBuffer: ArrayBuffer,
   context: TransferContext,
@@ -91,6 +137,7 @@ export function fillDocx(
 ): Buffer {
   void highlight; // ハイライトはテンプレート側 Run 属性で対応（3-A 方式）
   const zip = new PizZip(templateBuffer);
+  normalizeWordXmlParts(zip);
   const mappingLookup = buildMappingLookup(mappings);
   const doc = new Docxtemplater(zip, {
     paragraphLoop: true,
@@ -100,5 +147,6 @@ export function fillDocx(
     parser: createTransferParser(mappingLookup),
   });
   doc.render(context as Record<string, unknown>);
-  return doc.getZip().generate({ type: "nodebuffer", compression: "DEFLATE" }) as Buffer;
+  normalizeWordXmlParts(doc.getZip());
+  return generateDocxPackage(doc.getZip());
 }
