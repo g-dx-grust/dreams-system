@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Download, FileText, Files } from "lucide-react";
+import { Download, FileText, Files, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Field } from "@/components/ui/field";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import {
   generateCaseDocuments,
@@ -24,12 +25,34 @@ type Props = {
   parcelCount: number;
 };
 
+function hasTransferMapping(template: TemplateGenerationOption) {
+  return template.mapping_count > 0;
+}
+
+function initialBulkSelection(templates: TemplateGenerationOption[]) {
+  return templates.filter(hasTransferMapping).map((template) => template.id);
+}
+
+function templateSearchText(template: TemplateGenerationOption) {
+  return [
+    template.name,
+    template.category_name,
+    template.location_label ?? "",
+    template.file_type,
+    `v${template.version}`,
+    template.mapping_count > 0 ? `転記${template.mapping_count}件` : "転記なし",
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
 export function DocumentGenerateForm({ caseId, templates, parcelCount }: Props) {
   const toast = useToast();
   const [templateId, setTemplateId] = useState<string>("");
   const [selectedTemplateIds, setSelectedTemplateIds] = useState<number[]>(() =>
-    templates.map((template) => template.id),
+    initialBulkSelection(templates),
   );
+  const [bulkQuery, setBulkQuery] = useState("");
   const [highlight, setHighlight] = useState(true);
   const hasParcels = parcelCount > 0;
   const [includeParcelAttachment, setIncludeParcelAttachment] = useState(true);
@@ -50,19 +73,28 @@ export function DocumentGenerateForm({ caseId, templates, parcelCount }: Props) 
   useEffect(() => {
     setSelectedTemplateIds((current) => {
       const availableIds = new Set(templates.map((template) => template.id));
-      const kept = current.filter((id) => availableIds.has(id));
-      return kept.length > 0 ? kept : templates.map((template) => template.id);
+      return current.filter((id) => availableIds.has(id));
     });
   }, [templates]);
 
-  const selectedTemplateSet = useMemo(
-    () => new Set(selectedTemplateIds),
-    [selectedTemplateIds],
-  );
+  const selectedTemplateSet = useMemo(() => new Set(selectedTemplateIds), [selectedTemplateIds]);
   const selectedTemplates = useMemo(
     () => templates.filter((template) => selectedTemplateSet.has(template.id)),
     [selectedTemplateSet, templates],
   );
+  const mappedTemplateCount = useMemo(
+    () => templates.filter(hasTransferMapping).length,
+    [templates],
+  );
+  const selectedWithoutMappingCount = useMemo(
+    () => selectedTemplates.filter((template) => !hasTransferMapping(template)).length,
+    [selectedTemplates],
+  );
+  const filteredTemplates = useMemo(() => {
+    const query = bulkQuery.trim().toLowerCase();
+    if (!query) return templates;
+    return templates.filter((template) => templateSearchText(template).includes(query));
+  }, [bulkQuery, templates]);
 
   function handleToggleTemplate(id: number, checked: boolean) {
     setBulkGenerated(null);
@@ -73,10 +105,18 @@ export function DocumentGenerateForm({ caseId, templates, parcelCount }: Props) 
     });
   }
 
-  function handleSelectAll() {
+  function handleSelectVisibleTemplates() {
     setBulkGenerated(null);
     setError(null);
-    setSelectedTemplateIds(templates.map((template) => template.id));
+    setSelectedTemplateIds((current) =>
+      Array.from(new Set([...current, ...filteredTemplates.map((template) => template.id)])),
+    );
+  }
+
+  function handleSelectMappedTemplates() {
+    setBulkGenerated(null);
+    setError(null);
+    setSelectedTemplateIds(initialBulkSelection(templates));
   }
 
   function handleClearSelection() {
@@ -145,7 +185,10 @@ export function DocumentGenerateForm({ caseId, templates, parcelCount }: Props) 
       }
       setBulkGenerated(result.data);
       if (result.data.failed.length === 0) {
-        toast({ message: `${result.data.generated.length}件の帳票を生成しました`, tone: "success" });
+        toast({
+          message: `${result.data.generated.length}件の帳票を生成しました`,
+          tone: "success",
+        });
       } else {
         toast({
           message: `${result.data.generated.length}件を生成しました（${result.data.failed.length}件未生成）`,
@@ -180,10 +223,9 @@ export function DocumentGenerateForm({ caseId, templates, parcelCount }: Props) 
                   <option value="">選択してください</option>
                   {templates.map((t) => (
                     <option key={t.id} value={String(t.id)}>
-                      [{t.category_name}]
-                      {t.location_label ? ` [${t.location_label}]` : ""}
-                      {" "}
-                      {t.name} v{t.version} (.{t.file_type})
+                      [{t.category_name}]{t.location_label ? ` [${t.location_label}]` : ""} {t.name}{" "}
+                      v{t.version} (.{t.file_type} /{" "}
+                      {t.mapping_count > 0 ? `転記${t.mapping_count}件` : "転記なし"})
                     </option>
                   ))}
                 </Select>
@@ -205,7 +247,9 @@ export function DocumentGenerateForm({ caseId, templates, parcelCount }: Props) 
                   onClick={handleGenerate}
                   loading={generating}
                   loadingLabel="生成中…"
-                  disabled={!templateId || bulkGenerating || (preview?.missingRequired?.length ?? 0) > 0}
+                  disabled={
+                    !templateId || bulkGenerating || (preview?.missingRequired?.length ?? 0) > 0
+                  }
                 >
                   この帳票を生成する
                 </Button>
@@ -219,10 +263,31 @@ export function DocumentGenerateForm({ caseId, templates, parcelCount }: Props) 
                   <span className="text-s font-medium">
                     一括生成 {selectedTemplates.length} / {templates.length} 件
                   </span>
+                  <Badge tone={mappedTemplateCount > 0 ? "success" : "warning"}>
+                    転記あり {mappedTemplateCount} 件
+                  </Badge>
+                  {selectedWithoutMappingCount > 0 && (
+                    <Badge tone="warning">転記なし {selectedWithoutMappingCount} 件選択</Badge>
+                  )}
                 </div>
-                <div className="flex items-center gap-xs">
-                  <Button type="button" variant="text" size="sm" onClick={handleSelectAll}>
-                    全選択
+                <div className="flex flex-wrap items-center gap-xs">
+                  <Button
+                    type="button"
+                    variant="text"
+                    size="sm"
+                    onClick={handleSelectVisibleTemplates}
+                    disabled={filteredTemplates.length === 0}
+                  >
+                    表示分を選択
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="text"
+                    size="sm"
+                    onClick={handleSelectMappedTemplates}
+                    disabled={mappedTemplateCount === 0}
+                  >
+                    転記ありを選択
                   </Button>
                   <Button type="button" variant="text" size="sm" onClick={handleClearSelection}>
                     解除
@@ -231,36 +296,64 @@ export function DocumentGenerateForm({ caseId, templates, parcelCount }: Props) 
               </div>
 
               {templates.length === 0 ? (
-                <p className="text-s text-text-grey">この案件で生成できるテンプレートがありません。</p>
+                <p className="text-s text-text-grey">
+                  この案件で生成できるテンプレートがありません。
+                </p>
               ) : (
-                <div className="max-h-[280px] overflow-y-auto rounded-s border border-border bg-white">
-                  {templates.map((template) => (
-                    <label
-                      key={template.id}
-                      className="flex min-w-0 cursor-pointer items-start gap-s border-b border-border px-s py-s last:border-b-0 hover:bg-grey-7"
-                    >
-                      <Checkbox
-                        checked={selectedTemplateSet.has(template.id)}
-                        onChange={(e) => handleToggleTemplate(template.id, e.target.checked)}
-                        className="mt-[3px]"
-                        disabled={bulkGenerating}
-                      />
-                      <span className="flex min-w-0 flex-1 flex-col gap-xxs">
-                        <span className="flex min-w-0 flex-wrap items-center gap-xs">
-                          <Badge tone="info">{template.category_name}</Badge>
-                          {template.location_label && (
-                            <Badge tone="neutral">{template.location_label}</Badge>
-                          )}
-                          <Badge tone="neutral">.{template.file_type}</Badge>
-                          <span className="min-w-0 truncate font-medium" title={template.name}>
-                            {template.name}
+                <>
+                  <div className="flex items-center gap-xs rounded-s border border-border bg-white px-s py-xs">
+                    <Search size={14} className="shrink-0 text-text-grey" aria-hidden="true" />
+                    <Input
+                      value={bulkQuery}
+                      onChange={(e) => setBulkQuery(e.target.value)}
+                      placeholder="様式名・自治体・カテゴリ"
+                      aria-label="一括生成するテンプレートを検索"
+                      className="border-0 px-0 shadow-none hover:border-0 focus:border-0"
+                    />
+                  </div>
+                  <div className="max-h-[280px] overflow-y-auto rounded-s border border-border bg-white">
+                    {filteredTemplates.length === 0 ? (
+                      <p className="px-s py-m text-s text-text-grey">
+                        一致するテンプレートがありません。
+                      </p>
+                    ) : (
+                      filteredTemplates.map((template) => (
+                        <label
+                          key={template.id}
+                          className="flex min-w-0 cursor-pointer items-start gap-s border-b border-border px-s py-s last:border-b-0 hover:bg-grey-7"
+                        >
+                          <Checkbox
+                            checked={selectedTemplateSet.has(template.id)}
+                            onChange={(e) => handleToggleTemplate(template.id, e.target.checked)}
+                            className="mt-[3px]"
+                            disabled={bulkGenerating}
+                          />
+                          <span className="flex min-w-0 flex-1 flex-col gap-xxs">
+                            <span className="flex min-w-0 flex-wrap items-center gap-xs">
+                              <Badge tone="info">{template.category_name}</Badge>
+                              {template.location_label && (
+                                <Badge tone="neutral">{template.location_label}</Badge>
+                              )}
+                              <Badge tone="neutral">.{template.file_type}</Badge>
+                              <Badge tone={hasTransferMapping(template) ? "success" : "warning"}>
+                                {hasTransferMapping(template)
+                                  ? `転記 ${template.mapping_count} 件`
+                                  : "転記なし"}
+                              </Badge>
+                              <span className="min-w-0 truncate font-medium" title={template.name}>
+                                {template.name}
+                              </span>
+                            </span>
+                            <span className="text-xs text-text-grey">
+                              v{template.version}
+                              {template.location_label ? ` / ${template.location_label}` : ""}
+                            </span>
                           </span>
-                        </span>
-                        <span className="text-xs text-text-grey">v{template.version}</span>
-                      </span>
-                    </label>
-                  ))}
-                </div>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                </>
               )}
 
               <Button
@@ -270,7 +363,10 @@ export function DocumentGenerateForm({ caseId, templates, parcelCount }: Props) 
                 loading={bulkGenerating}
                 loadingLabel="一括生成中…"
                 disabled={
-                  selectedTemplateIds.length === 0 || checking || generating || templates.length === 0
+                  selectedTemplateIds.length === 0 ||
+                  checking ||
+                  generating ||
+                  templates.length === 0
                 }
               >
                 選択した帳票を一括生成
@@ -414,7 +510,6 @@ export function DocumentGenerateForm({ caseId, templates, parcelCount }: Props) 
               )}
             </div>
           )}
-
         </div>
       </CardBody>
     </Card>

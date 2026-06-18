@@ -120,6 +120,7 @@ export type TemplateGenerationOption = {
   version: number;
   category_name: string;
   location_label: string | null;
+  mapping_count: number;
 };
 
 export type TemplateDetail = TemplateRow & {
@@ -580,8 +581,7 @@ export async function listTemplates(params: ListTemplatesParams = {}): Promise<
 
   // 並べ替え許可カラムの whitelist。未指定・不正値は既定順（name 昇順）を維持する。
   const sortableColumns = ["name", "file_type", "version", "is_active", "updated_at", "created_at"];
-  const sortColumn =
-    params.sort && sortableColumns.includes(params.sort) ? params.sort : "name";
+  const sortColumn = params.sort && sortableColumns.includes(params.sort) ? params.sort : "name";
   const ascending = params.order !== "desc";
 
   try {
@@ -733,7 +733,7 @@ export async function listTemplateGenerationOptions(
           !isDebugTemplateDescription(template.description) &&
           (template.file_type !== "xlsx" || template.mapping_count > 0),
       )
-      .map(({ description: _description, mapping_count: _mappingCount, ...template }) => template);
+      .map(({ description: _description, ...template }) => template);
 
     return ok(templates);
   } catch {
