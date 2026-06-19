@@ -97,13 +97,118 @@ function normalizeTextutilWordXml(xml: string) {
   return xml.replace(/\bw:sz-cs\b/g, "w:szCs").replace(/\bw:first-line\b/g, "w:firstLine");
 }
 
+const LEGACY_EQ_OVERLAY_PATTERN = /eq\s*\\o\\ac\(○,\s*([0-9０-９]+|印)\s*\)/gu;
+
+function normalizeNumberToken(value: string) {
+  return value.replace(/[０-９]/g, (char) =>
+    String.fromCharCode(char.charCodeAt(0) - 0xfee0),
+  );
+}
+
+function resolveLegacyEqOverlayValue(value: string): string | null {
+  if (value === "印") return "㊞";
+
+  const numericValue = Number.parseInt(normalizeNumberToken(value), 10);
+  if (!Number.isInteger(numericValue) || numericValue < 1 || numericValue > 20) {
+    return null;
+  }
+
+  return String.fromCharCode(0x245f + numericValue);
+}
+
+function normalizeLegacyEqOverlayText(paragraphXml: string) {
+  const textNodes = [...paragraphXml.matchAll(/<w:t\b[^>]*>[\s\S]*?<\/w:t>/gu)].map((match) => {
+    const fullMatch = match[0];
+    const openEnd = fullMatch.indexOf(">");
+    const closeStart = fullMatch.lastIndexOf("</w:t>");
+    const innerStart = (match.index ?? 0) + openEnd + 1;
+    const innerEnd = (match.index ?? 0) + closeStart;
+
+    return {
+      innerStart,
+      innerEnd,
+      text: paragraphXml.slice(innerStart, innerEnd),
+      nextText: paragraphXml.slice(innerStart, innerEnd),
+      flatStart: 0,
+      flatEnd: 0,
+    };
+  });
+
+  if (textNodes.length === 0) return paragraphXml;
+
+  let flatText = "";
+  for (const textNode of textNodes) {
+    textNode.flatStart = flatText.length;
+    flatText += textNode.text;
+    textNode.flatEnd = flatText.length;
+  }
+
+  const matches = [...flatText.matchAll(LEGACY_EQ_OVERLAY_PATTERN)]
+    .map((match) => {
+      const replacement = resolveLegacyEqOverlayValue(match[1] ?? "");
+      if (!replacement) return null;
+
+      return {
+        start: match.index ?? 0,
+        end: (match.index ?? 0) + match[0].length,
+        replacement,
+      };
+    })
+    .filter((match): match is { start: number; end: number; replacement: string } =>
+      Boolean(match),
+    )
+    .reverse();
+
+  if (matches.length === 0) return paragraphXml;
+
+  for (const match of matches) {
+    let inserted = false;
+
+    for (const textNode of textNodes) {
+      const overlapStart = Math.max(match.start, textNode.flatStart);
+      const overlapEnd = Math.min(match.end, textNode.flatEnd);
+      if (overlapStart >= overlapEnd) continue;
+
+      const localStart = overlapStart - textNode.flatStart;
+      const localEnd = overlapEnd - textNode.flatStart;
+      const before = textNode.nextText.slice(0, localStart);
+      const after = textNode.nextText.slice(localEnd);
+
+      if (!inserted) {
+        textNode.nextText = `${before}${match.replacement}${after}`;
+        inserted = true;
+      } else {
+        textNode.nextText = `${before}${after}`;
+      }
+    }
+  }
+
+  let normalizedXml = "";
+  let cursor = 0;
+  for (const textNode of textNodes) {
+    normalizedXml += paragraphXml.slice(cursor, textNode.innerStart);
+    normalizedXml += textNode.nextText;
+    cursor = textNode.innerEnd;
+  }
+
+  return normalizedXml + paragraphXml.slice(cursor);
+}
+
+function normalizeLegacyEqOverlays(xml: string) {
+  if (!xml.includes("eq") || !xml.includes("\\o\\ac")) return xml;
+
+  return xml.replace(/<w:p\b[\s\S]*?<\/w:p>/gu, (paragraphXml) =>
+    normalizeLegacyEqOverlayText(paragraphXml),
+  );
+}
+
 function normalizeWordXmlParts(zip: PizZip) {
   for (const fileName of Object.keys(zip.files)) {
     const file = zip.files[fileName];
     if (!file || file.dir || !/^word\/.+\.xml$/u.test(fileName)) continue;
 
     const xml = file.asText();
-    const normalized = normalizeTextutilWordXml(xml);
+    const normalized = normalizeLegacyEqOverlays(normalizeTextutilWordXml(xml));
     if (normalized !== xml) {
       zip.file(fileName, normalized);
     }

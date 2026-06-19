@@ -218,4 +218,40 @@ describe("fillDocx", () => {
     expect(Object.keys(outputZip.files)[0]).toBe("[Content_Types].xml");
     expect(Object.values(outputZip.files).some((file) => file.dir)).toBe(false);
   });
+
+  it("旧Word変換由来のEQ丸数字と丸印を生成時に補正する", () => {
+    const zip = new PizZip(createDocxTemplate("{today}"));
+    zip.file(
+      "word/document.xml",
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p>
+      <w:r><w:t xml:space="preserve">　　　eq \\o\\ac(○,</w:t></w:r>
+      <w:r><w:rPr><w:position w:val="3"/></w:rPr><w:t>1</w:t></w:r>
+      <w:r><w:t>)案内図</w:t></w:r>
+    </w:p>
+    <w:p>
+      <w:r><w:t xml:space="preserve">氏名 {applicant.name} eq \\o\\ac(○,</w:t></w:r>
+      <w:r><w:rPr><w:position w:val="3"/></w:rPr><w:t>印</w:t></w:r>
+      <w:r><w:t>)</w:t></w:r>
+    </w:p>
+    <w:sectPr/>
+  </w:body>
+</w:document>`,
+    );
+
+    const rendered = fillDocx(
+      zip.generate({ type: "arraybuffer", compression: "DEFLATE" }) as ArrayBuffer,
+      buildTransferContext({ applicant: { ...EMPTY_PERSON, name: "田中太郎" } }),
+      false,
+    );
+    const xml = extractDocumentXml(rendered);
+    const text = extractDocumentText(rendered);
+
+    expect(xml).toContain("①");
+    expect(text).toContain("案内図");
+    expect(text).toContain("氏名 田中太郎 ㊞");
+    expect(xml).not.toContain("eq \\o\\ac");
+  });
 });
