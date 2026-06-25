@@ -27,11 +27,7 @@ type Search = {
 
 const PER_PAGE = 20;
 
-export default async function DocumentsPage({
-  searchParams,
-}: {
-  searchParams: Promise<Search>;
-}) {
+export default async function DocumentsPage({ searchParams }: { searchParams: Promise<Search> }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
@@ -62,7 +58,7 @@ export default async function DocumentsPage({
   if (!result.ok) {
     return (
       <>
-        <PageHeader title="帳票履歴" description="生成済み帳票の一覧とダウンロード" />
+        <PageHeader title="帳票履歴" description="生成済み帳票の一覧とダウンロードができます。" />
         <p className="text-s text-danger">{result.error}</p>
       </>
     );
@@ -76,7 +72,7 @@ export default async function DocumentsPage({
 
   return (
     <>
-      <PageHeader title="帳票履歴" description="生成済み帳票の一覧とダウンロード" />
+      <PageHeader title="帳票履歴" description="生成済み帳票の一覧とダウンロードができます。" />
 
       <Card className="mb-m">
         <DocumentHistoryFilter templates={templates} />

@@ -5,6 +5,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import maplibregl from "maplibre-gl";
+import { ChevronRight, MapPin, SlidersHorizontal } from "lucide-react";
 import type {
   GeoJSONSource,
   RasterTileSource,
@@ -20,7 +21,6 @@ import {
   JAPAN_DEFAULT_ZOOM,
   MAP_COLORS,
   PARCEL_FOCUS_ZOOM,
-  caseLabel,
   type CaseOverviewRow,
   type GsiBaseLayer,
   type GsiBaseLayerId,
@@ -127,6 +127,7 @@ export function MapOverview({
   const casesRef = useRef<CaseOverviewRow[]>(cases);
   const importedPointsRef = useRef<ImportedCoordinatePointRow[]>(importedPoints);
   const clickRef = useRef<(e: MapMouseEvent) => void>(() => {});
+  const filterInputRef = useRef<HTMLInputElement | null>(null);
 
   const [loaded, setLoaded] = useState(false);
   const [baseLayer, setBaseLayer] = useState<GsiBaseLayerId>("pale");
@@ -137,13 +138,7 @@ export function MapOverview({
   const trimmedQuery = query.trim().toLowerCase();
   const filtered = trimmedQuery
     ? cases.filter((c) =>
-        [
-          c.case_number,
-          c.case_name,
-          c.case_type,
-          c.status,
-          c.primary_address,
-        ]
+        [c.case_number, c.case_name, c.case_type, c.status, c.primary_address]
           .filter((v): v is string => !!v)
           .join(" ")
           .toLowerCase()
@@ -351,18 +346,38 @@ export function MapOverview({
   };
 
   return (
-    <div className="flex flex-col gap-m lg:flex-row">
-      <div className="relative h-[70vh] w-full overflow-hidden rounded-m border border-border lg:flex-1">
-        <div
-          ref={containerRef}
-          className="h-full w-full"
-          aria-label="全案件の地図"
-          role="application"
-        />
-
-        <div className="absolute left-s top-s z-10 flex flex-col gap-s">
+    <div className="space-y-m">
+      <div className="flex flex-wrap items-center gap-s">
+        <div className="min-w-[280px] flex-1">
           <MapSearchBox onSelect={handleSearchSelect} />
-          <div className="flex w-fit overflow-hidden rounded-s border border-border bg-white shadow-s">
+        </div>
+        <button
+          type="button"
+          onClick={() => filterInputRef.current?.focus()}
+          className="inline-flex h-8 items-center gap-xs rounded-s border border-border bg-white px-m text-s font-semibold text-text-black hover:bg-grey-7"
+        >
+          <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
+          フィルター
+        </button>
+        <button
+          type="button"
+          onClick={() => setQuery("")}
+          className="h-8 px-s text-s font-semibold text-main hover:underline"
+        >
+          フィルターをクリア
+        </button>
+      </div>
+
+      <div className="grid gap-m xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="relative h-[68vh] min-h-[520px] w-full overflow-hidden rounded-l border border-border bg-white">
+          <div
+            ref={containerRef}
+            className="h-full w-full"
+            aria-label="全案件の地図"
+            role="application"
+          />
+
+          <div className="absolute left-s top-s z-10 flex w-fit overflow-hidden rounded-s border border-border bg-white shadow-s">
             {GSI_BASE_LAYERS.map((l) => {
               const active = baseLayer === l.id;
               return (
@@ -381,138 +396,154 @@ export function MapOverview({
             })}
           </div>
         </div>
-      </div>
 
-      <aside className="flex flex-col gap-m lg:w-80">
-        <div className="rounded-s border border-border bg-grey-6 p-s text-s text-text-grey tabular-nums">
-          案件 {cases.length} 件 / 取り込み点 {importedPoints.length} 件
-        </div>
-        <CoordinateImportForm />
-        {(cases.length > 0 || importedPoints.length > 0) && (
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="案件名・住所・点名で絞り込み"
-            aria-label="案件名・住所・点名で絞り込み"
-            className="rounded-s border border-border bg-white px-s py-xs text-s text-text-black outline-none placeholder:text-text-grey focus:border-main"
-          />
-        )}
+        <aside className="min-w-0 overflow-hidden rounded-l border border-border bg-white">
+          <div className="flex items-center justify-between gap-s border-b border-border px-m py-m">
+            <div>
+              <h2 className="text-l font-semibold text-text-black">
+                案件 <span className="tabular-nums">{filtered.length}</span> 件
+              </h2>
+              <p className="mt-xxs text-xs text-text-grey tabular-nums">
+                取り込み点 {filteredImportedPoints.length} 件
+              </p>
+            </div>
+            <select
+              className="h-8 rounded-s border border-border bg-white px-s text-s text-text-black"
+              aria-label="案件の並び順"
+              defaultValue="updated"
+            >
+              <option value="updated">更新日が新しい順</option>
+              <option value="case_number">案件番号順</option>
+            </select>
+          </div>
 
-        {cases.length === 0 ? (
-          <p className="text-s text-text-grey">
-            地図に表示できる案件がまだありません。案件詳細の「地図」タブで案件ピンを保存すると、ここに表示されます。
-          </p>
-        ) : (
-          <>
-            {filtered.length === 0 ? (
-              <p className="text-s text-text-grey">一致する案件がありません。</p>
-            ) : (
-              <ul className="flex max-h-[48vh] flex-col gap-s overflow-y-auto">
-                {filtered.map((c) => {
-                  const isSelected = selectedCaseId === c.case_id;
-                  return (
-                    <li
-                      key={c.case_id}
-                      className={`rounded-s border p-s ${
-                        isSelected ? "border-main bg-main-soft" : "border-border bg-white"
+          {(cases.length > 0 || importedPoints.length > 0) && (
+            <div className="border-b border-border px-m py-s">
+              <input
+                ref={filterInputRef}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="案件名・住所・点名で絞り込み"
+                aria-label="案件名・住所・点名で絞り込み"
+                className="h-8 w-full rounded-s border border-border bg-white px-s text-s text-text-black outline-none placeholder:text-text-quaternary focus:border-main"
+              />
+            </div>
+          )}
+
+          {cases.length === 0 ? (
+            <p className="px-m py-m text-s text-text-grey">
+              地図に表示できる案件がまだありません。案件詳細の「地図」タブで案件ピンを保存すると、ここに表示されます。
+            </p>
+          ) : filtered.length === 0 ? (
+            <p className="px-m py-m text-s text-text-grey">一致する案件がありません。</p>
+          ) : (
+            <ul className="max-h-[52vh] divide-y divide-border overflow-y-auto">
+              {filtered.map((c, index) => {
+                const isSelected = selectedCaseId === c.case_id;
+                return (
+                  <li key={c.case_id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedCaseId(c.case_id);
+                        setSelectedPointId(null);
+                      }}
+                      className={`grid w-full grid-cols-[28px_minmax(0,1fr)_20px] items-start gap-s px-m py-s text-left ${
+                        isSelected ? "bg-main-soft" : "hover:bg-grey-5"
                       }`}
                     >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedCaseId(c.case_id);
-                          setSelectedPointId(null);
-                        }}
-                        className="block w-full text-left"
-                      >
-                        <span className="block truncate text-s font-medium text-text-black">
-                          {caseLabel(c)}
+                      <MapPin
+                        className={`mt-xxs h-5 w-5 ${pinToneClass(index)}`}
+                        aria-hidden="true"
+                      />
+                      <span className="min-w-0">
+                        <span className="block text-xs text-text-grey tabular-nums">
+                          {c.case_number}
+                        </span>
+                        <span className="mt-xxs block truncate text-s font-semibold text-text-black">
+                          {c.case_name}
                         </span>
                         <span className="mt-xs flex flex-wrap items-center gap-xs">
                           <Badge tone="info">{caseTypeLabel(c.case_type)}</Badge>
-                          <Badge tone={caseStatusTone(c.status)}>
-                            {caseStatusLabel(c.status)}
-                          </Badge>
+                          <Badge tone={caseStatusTone(c.status)}>{caseStatusLabel(c.status)}</Badge>
                         </span>
                         {c.primary_address && (
-                          <span className="mt-xs block truncate text-s text-text-grey">
+                          <span className="mt-xs block truncate text-xs text-text-grey">
                             {c.primary_address}
                           </span>
                         )}
-                        <span className="mt-xs block text-xs text-text-grey tabular-nums">
-                          土地情報 {c.parcel_count} 件
-                        </span>
-                      </button>
-                      {isSelected && (
-                        <div className="mt-s flex gap-s">
-                          <Link
-                            href={`/cases/${c.case_id}`}
-                            className="text-s text-main hover:underline"
-                          >
-                            案件詳細を開く
-                          </Link>
-                          <Link
-                            href={`/cases/${c.case_id}/map`}
-                            className="text-s text-text-grey hover:underline"
-                          >
-                            地図タブ
-                          </Link>
-                        </div>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </>
-        )}
+                      </span>
+                      <ChevronRight
+                        className="mt-l h-4 w-4 text-text-quaternary"
+                        aria-hidden="true"
+                      />
+                    </button>
+                    {isSelected && (
+                      <div className="flex gap-m bg-main-soft px-m pb-s pl-[64px] text-s">
+                        <Link href={`/cases/${c.case_id}`} className="ui-link font-semibold">
+                          案件詳細
+                        </Link>
+                        <Link href={`/cases/${c.case_id}/map`} className="ui-link-subtle">
+                          地図タブ
+                        </Link>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
 
-        {importedPoints.length > 0 && (
-          <div className="flex flex-col gap-s">
-            <p className="text-s font-semibold text-text-black">取り込み点</p>
-            {filteredImportedPoints.length === 0 ? (
-              <p className="text-s text-text-grey">一致する取り込み点がありません。</p>
-            ) : (
-              <ul className="flex max-h-[28vh] flex-col gap-s overflow-y-auto">
-                {filteredImportedPoints.map((point) => {
-                  const isSelected = selectedPointId === point.id;
-                  return (
-                    <li
-                      key={point.id}
-                      className={`rounded-s border p-s ${
-                        isSelected ? "border-warning bg-warning-soft" : "border-border bg-white"
-                      }`}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedPointId(point.id);
-                          setSelectedCaseId(null);
-                        }}
-                        className="block w-full text-left"
-                      >
-                        <span className="block truncate text-s font-medium text-text-black">
-                          {point.point_name ?? `座標点 #${point.id}`}
-                        </span>
-                        <span className="mt-xs block truncate text-xs text-text-grey">
-                          {point.source_file_name}
-                        </span>
-                        <span className="mt-xs block text-xs text-text-grey tabular-nums">
-                          緯度 {point.latitude.toFixed(6)} / 経度 {point.longitude.toFixed(6)}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
+          <div className="border-t border-border p-m">
+            <CoordinateImportForm />
+            {importedPoints.length > 0 && (
+              <div className="mt-m border-t border-border pt-m">
+                <p className="text-s font-semibold text-text-black">取り込み点</p>
+                {filteredImportedPoints.length === 0 ? (
+                  <p className="mt-xs text-s text-text-grey">一致する取り込み点がありません。</p>
+                ) : (
+                  <ul className="mt-s max-h-48 space-y-xs overflow-y-auto">
+                    {filteredImportedPoints.map((point) => {
+                      const isSelected = selectedPointId === point.id;
+                      return (
+                        <li key={point.id}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedPointId(point.id);
+                              setSelectedCaseId(null);
+                            }}
+                            className={`block w-full rounded-s border px-s py-xs text-left ${
+                              isSelected
+                                ? "border-warning bg-warning-soft"
+                                : "border-border bg-white hover:bg-grey-5"
+                            }`}
+                          >
+                            <span className="block truncate text-s font-semibold text-text-black">
+                              {point.point_name ?? `座標点 #${point.id}`}
+                            </span>
+                            <span className="mt-xxs block truncate text-xs text-text-grey">
+                              {point.source_file_name}
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
             )}
+            <p className="mt-s text-xs text-text-grey">
+              背景地図は地理院タイルです。案件ピンは案件マスタの座標です。
+            </p>
           </div>
-        )}
-
-        <p className="text-s text-text-grey">
-          背景地図は地理院タイル（出典は地図右下に常時表示）。案件ピンは案件マスタの座標です。
-        </p>
-      </aside>
+        </aside>
+      </div>
     </div>
   );
+}
+
+function pinToneClass(index: number): string {
+  const tones = ["text-main", "text-warning", "text-danger", "text-success", "text-text-grey"];
+  return tones[index % tones.length] ?? "text-main";
 }

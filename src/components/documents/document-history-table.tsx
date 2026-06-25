@@ -43,11 +43,7 @@ export function DocumentHistoryTable({ items, showCaseNumber, sortable }: Props)
               <TH className="w-[150px]">案件番号</TH>
             ))}
           <TH>テンプレート</TH>
-          {sortable ? (
-            <SortHeader column="file_name" label="ファイル名" />
-          ) : (
-            <TH>ファイル名</TH>
-          )}
+          {sortable ? <SortHeader column="file_name" label="ファイル名" /> : <TH>ファイル名</TH>}
           <TH className="w-[120px]">形式</TH>
           {sortable ? (
             <SortHeader column="version" label="バージョン" numeric className="w-[120px]" />
@@ -90,10 +86,14 @@ export function DocumentHistoryTable({ items, showCaseNumber, sortable }: Props)
                 href={`/api/documents/${row.id}/download`}
                 download={row.file_name}
                 aria-label={`${row.file_name} をダウンロード`}
-                className={buttonVariants({ variant: "secondary", size: "sm" })}
+                title="ダウンロード"
+                className={buttonVariants({
+                  variant: "secondary",
+                  size: "sm",
+                  className: "h-8 w-8 px-0",
+                })}
               >
                 <Download className="h-4 w-4" aria-hidden="true" />
-                ダウンロード
               </a>
             </TD>
           </TR>

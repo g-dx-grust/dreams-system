@@ -28,7 +28,7 @@ export function MapSearchBox({ onSelect }: { onSelect: (result: AddressSearchRes
   };
 
   return (
-    <div className="w-64 max-w-[80vw]">
+    <div className="w-full min-w-0">
       <form
         onSubmit={submit}
         className="flex overflow-hidden rounded-s border border-border bg-white shadow-s"
@@ -36,7 +36,7 @@ export function MapSearchBox({ onSelect }: { onSelect: (result: AddressSearchRes
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="住所または座標で検索"
+          placeholder="住所・地名で検索"
           aria-label="住所または座標で検索"
           className="min-w-0 flex-1 bg-transparent px-s py-xs text-s text-text-black outline-none placeholder:text-text-grey"
         />

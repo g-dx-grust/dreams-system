@@ -1,10 +1,11 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { ChevronRight, FileStack } from "lucide-react";
+import { ChevronRight, FileStack, MoreVertical, Plus } from "lucide-react";
 import { getCurrentUser } from "@/lib/permissions";
 import { listTemplates, type TemplateListRow } from "@/server/templates";
 import { PageHeader } from "@/components/ui/page-header";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { SortHeader } from "@/components/common/sort-header";
 import { Card, CardBody } from "@/components/ui/card";
@@ -176,13 +177,13 @@ export default async function TemplatesPage({
     <>
       <PageHeader
         title="テンプレート"
-        description="様式ファイルの登録・マッピング設定"
+        description="帳票ファイルの登録・マッピング設定を行います。"
         actions={
-          <Link
-            href="/templates/new"
-            className="inline-flex h-7 items-center justify-center rounded-s bg-main px-s text-s font-medium leading-tight text-white transition-colors hover:bg-main-hover"
-          >
-            新規アップロード
+          <Link href="/templates/new">
+            <Button>
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              新規アップロード
+            </Button>
           </Link>
         }
       />
@@ -299,14 +300,21 @@ export default async function TemplatesPage({
                               href={`/templates/${current.id}/mapping`}
                               className="ui-link text-s"
                             >
-                              マッピングを開く
+                              マッピング
                             </Link>
+                            <MoreVertical
+                              className="h-4 w-4 text-text-quaternary"
+                              aria-hidden="true"
+                            />
                             {previous.length > 0 ? (
                               <details className="group/version">
                                 <summary className="inline-flex h-7 cursor-pointer list-none items-center gap-xxs rounded-s px-xs text-xs text-text-grey hover:bg-grey-7 hover:text-text-black [&::-webkit-details-marker]:hidden">
                                   <FileStack className="h-3.5 w-3.5" aria-hidden="true" />
                                   旧版 {previous.length} 件
-                                  <ChevronRight className="h-3.5 w-3.5 transition-transform group-open/version:rotate-90" aria-hidden="true" />
+                                  <ChevronRight
+                                    className="h-3.5 w-3.5 transition-transform group-open/version:rotate-90"
+                                    aria-hidden="true"
+                                  />
                                 </summary>
                                 <ul className="mt-xs flex flex-col gap-xs rounded-s border border-border bg-grey-7 p-xs">
                                   {previous.map((version) => (

@@ -17,11 +17,7 @@ export function THead({
 }: React.HTMLAttributes<HTMLTableSectionElement> & { sticky?: boolean }) {
   return (
     <thead
-      className={cn(
-        "border-b border-border bg-head",
-        sticky && "sticky top-0 z-10",
-        className,
-      )}
+      className={cn("border-b border-border bg-head", sticky && "sticky top-0 z-10", className)}
       {...props}
     />
   );
@@ -74,7 +70,7 @@ export function TD({
   return (
     <td
       className={cn(
-        "px-m py-s align-middle leading-relaxed text-text-black",
+        "px-m py-m align-middle leading-relaxed text-text-black",
         numeric && "text-right tabular-nums whitespace-nowrap",
         className,
       )}

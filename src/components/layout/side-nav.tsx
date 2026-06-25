@@ -1,22 +1,25 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import {
   BriefcaseBusiness,
+  ChevronDown,
   ContactRound,
   FileClock,
-  FilePlus2,
   LayoutDashboard,
   LayoutTemplate,
   MapPin,
+  PanelLeftClose,
+  PanelLeftOpen,
   ShieldCheck,
   Users,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { AppUser } from "@/lib/permissions";
-import { Button } from "@/components/ui/button";
 
 type NavItem = {
   href: string;
@@ -44,7 +47,7 @@ const items: NavItem[] = [
 ];
 
 const sections = [
-  { key: "workspace" as const, label: "業務" },
+  { key: "workspace" as const, label: "" },
   { key: "records" as const, label: "台帳・帳票" },
   { key: "admin" as const, label: "管理" },
 ];
@@ -67,95 +70,80 @@ export function SideNav({
   const pathname = usePathname();
   const visibleItems = items.filter((item) => !item.adminOnly || user.role === "admin");
 
-  // セグメント境界一致のうち最長の href を活性にする（誤活性防止）。
   const activeHref = visibleItems
     .filter((item) => pathname === item.href || pathname.startsWith(`${item.href}/`))
     .sort((a, b) => b.href.length - a.href.length)[0]?.href;
 
   const renderBody = (isCollapsed: boolean, mobile: boolean) => (
     <>
-      <div
-        className={cn(
-          "border-b border-border bg-white p-s",
-          isCollapsed ? "flex flex-col items-center gap-s" : "space-y-s",
-        )}
-      >
-        <div
-          className={cn(
-            isCollapsed
-              ? "flex flex-col items-center gap-s"
-              : "flex min-h-10 items-center justify-between gap-s",
-          )}
-        >
+      <div className={cn("px-m pb-m pt-l", isCollapsed && "px-s")}>
+        <div className={cn("flex items-center gap-s", isCollapsed && "justify-center")}>
           <Link
             href="/"
             aria-label="ダッシュボードへ移動"
             onClick={mobile ? onCloseMobile : undefined}
             className={cn(
-              "flex min-w-0 items-center gap-s rounded-s text-text-black transition-colors hover:bg-main-soft",
-              isCollapsed ? "h-9 w-9 justify-center" : "min-w-0 flex-1 px-xs py-xs",
+              "flex min-w-0 items-center gap-s rounded-s text-white",
+              isCollapsed && "justify-center",
             )}
           >
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-s bg-grust-navy text-xs font-semibold leading-none text-white">
-              DX
-            </span>
+            <Image
+              src="/dreams-logo.png"
+              alt="dreaMs"
+              width={44}
+              height={44}
+              className="h-11 w-11 shrink-0 rounded-full"
+              priority
+            />
             <span className={cn("min-w-0", isCollapsed && "sr-only")}>
-              <span className="block truncate text-m font-semibold leading-tight text-text-black">
+              <span className="block truncate text-xl font-semibold leading-tight text-white">
                 dreaMs
               </span>
-              <span className="block truncate text-xs leading-tight text-text-grey">
+              <span className="block truncate text-xs font-medium leading-tight text-white/75">
                 案件管理・帳票転記
               </span>
             </span>
           </Link>
 
-          {mobile ? (
-            <Button
+          {mobile && (
+            <button
               type="button"
-              variant="secondary"
-              size="md"
-              className="h-8 w-8 shrink-0 border-border-strong bg-grey-7 px-0 hover:bg-grey-9"
+              className="ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-s text-white/80 hover:bg-white/10 hover:text-white"
               aria-label="メニューを閉じる"
               onClick={onCloseMobile}
             >
-              <span className="text-l font-semibold leading-none text-text-black" aria-hidden="true">
-                ×
-              </span>
-            </Button>
-          ) : (
-            <Button
-              type="button"
-              variant="secondary"
-              size="md"
-              className="h-8 w-8 shrink-0 border-border-strong bg-grey-7 px-0 hover:bg-grey-9"
-              aria-label={isCollapsed ? "サイドバーを開く" : "サイドバーを閉じる"}
-              title={isCollapsed ? "サイドバーを開く" : "サイドバーを閉じる"}
-              onClick={onToggleCollapse}
-            >
-              <span className="text-l font-semibold leading-none text-text-black" aria-hidden="true">
-                {isCollapsed ? "›" : "‹"}
-              </span>
-            </Button>
+              <X className="h-5 w-5" aria-hidden="true" />
+            </button>
           )}
         </div>
 
-        <Link
-          href="/cases/new"
-          onClick={mobile ? onCloseMobile : undefined}
-          title={isCollapsed ? "案件を登録する" : undefined}
+        <div
           className={cn(
-            "flex h-8 items-center justify-center gap-xs rounded-s bg-grust-navy px-s text-s font-semibold text-white transition-colors hover:bg-main-darken",
-            isCollapsed && "w-8 px-0",
+            "mt-l flex items-center gap-s rounded-l border border-white/10 bg-white/10 px-s py-s text-white",
+            isCollapsed && "justify-center px-0",
           )}
         >
-          <FilePlus2 className="h-4 w-4 shrink-0" aria-hidden="true" />
-          <span className={cn(isCollapsed && "sr-only")}>案件を登録する</span>
-        </Link>
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15 text-s font-semibold text-white">
+            {(user.fullName || user.email).slice(0, 1)}
+          </div>
+          <div className={cn("min-w-0 flex-1", isCollapsed && "sr-only")}>
+            <p className="truncate text-s font-semibold leading-tight text-white">
+              {user.fullName || "開発管理者"}
+            </p>
+            <p className="mt-xxs truncate text-xs text-white/70">
+              {user.role === "admin" ? "開発部" : "一般ユーザー"}
+            </p>
+          </div>
+          <ChevronDown
+            className={cn("h-4 w-4 shrink-0 text-white/70", isCollapsed && "sr-only")}
+            aria-hidden="true"
+          />
+        </div>
       </div>
 
       <nav
         aria-label="メインメニュー"
-        className="flex flex-1 flex-col gap-m overflow-y-auto px-s py-m"
+        className="flex flex-1 flex-col gap-l overflow-y-auto px-m pb-m"
       >
         {sections.map((section) => {
           const sectionItems = visibleItems.filter((item) => item.section === section.key);
@@ -163,16 +151,18 @@ export function SideNav({
 
           return (
             <div key={section.key}>
-              <p
-                className={cn(
-                  "px-s pb-xs text-xs font-semibold text-text-quaternary",
-                  isCollapsed && "sr-only",
-                )}
-              >
-                {section.label}
-              </p>
+              {section.label && (
+                <p
+                  className={cn(
+                    "mb-xs px-s text-xs font-semibold text-white/50",
+                    isCollapsed && "sr-only",
+                  )}
+                >
+                  {section.label}
+                </p>
+              )}
 
-              <div className="flex flex-col gap-xxs">
+              <div className="flex flex-col gap-xs">
                 {sectionItems.map((item) => {
                   const isActive = item.href === activeHref;
                   const Icon = item.icon;
@@ -184,14 +174,17 @@ export function SideNav({
                       title={isCollapsed ? item.label : undefined}
                       onClick={mobile ? onCloseMobile : undefined}
                       className={cn(
-                        "flex min-h-10 items-center gap-s rounded-s border px-s text-s transition-colors",
+                        "flex min-h-10 items-center gap-s rounded-l border px-s text-s font-semibold transition-colors",
                         isCollapsed && "justify-center px-0",
                         isActive
-                          ? "border-main/20 bg-main-soft font-semibold text-main"
-                          : "border-transparent font-medium text-text-black hover:border-border hover:bg-grey-7",
+                          ? "border-main bg-main text-white shadow-s"
+                          : "border-transparent text-white/80 hover:border-white/10 hover:bg-white/10 hover:text-white",
                       )}
                     >
-                      <Icon className="h-4 w-4 shrink-0" strokeWidth={isActive ? 2.25 : 2} />
+                      <Icon
+                        className="h-[18px] w-[18px] shrink-0"
+                        strokeWidth={isActive ? 2.3 : 2}
+                      />
                       <span className={cn("truncate leading-tight", isCollapsed && "sr-only")}>
                         {item.label}
                       </span>
@@ -204,25 +197,23 @@ export function SideNav({
         })}
       </nav>
 
-      <div
-        className={cn(
-          "border-t border-border px-s py-s",
-          isCollapsed ? "text-center" : "text-left",
-        )}
-      >
-        <p className={cn("text-xs text-text-quaternary", isCollapsed && "sr-only")}>権限</p>
-        <p
+      <div className="px-m pb-m">
+        <button
+          type="button"
           className={cn(
-            "mt-xxs rounded-s border border-border bg-grey-5 px-s py-xs text-xs font-semibold text-text-grey",
-            isCollapsed && "px-xxs",
+            "flex h-10 w-full items-center justify-center gap-xs rounded-l border border-white/15 px-s text-s font-semibold text-white/80 hover:bg-white/10 hover:text-white",
+            isCollapsed && "px-0",
           )}
-          title={user.role === "admin" ? "管理者" : "一般ユーザー"}
+          aria-label={isCollapsed ? "サイドバーを開く" : "サイドバーを閉じる"}
+          onClick={onToggleCollapse}
         >
-          <span className={cn(isCollapsed && "sr-only")}>
-            {user.role === "admin" ? "管理者" : "一般ユーザー"}
-          </span>
-          {isCollapsed && <span aria-hidden="true">{user.role === "admin" ? "管" : "一"}</span>}
-        </p>
+          {isCollapsed ? (
+            <PanelLeftOpen className="h-4 w-4" aria-hidden="true" />
+          ) : (
+            <PanelLeftClose className="h-4 w-4" aria-hidden="true" />
+          )}
+          <span className={cn(isCollapsed && "sr-only")}>メニューを閉じる</span>
+        </button>
       </div>
     </>
   );
@@ -231,7 +222,7 @@ export function SideNav({
     <>
       <aside
         aria-label="サイドナビゲーション"
-        className="hidden shrink-0 flex-col overflow-hidden border-r border-border bg-white transition-[width] duration-200 ease-out lg:flex"
+        className="hidden shrink-0 flex-col overflow-hidden bg-grust-navy transition-[width] duration-200 ease-out lg:flex"
         style={{ width: collapsed ? "72px" : "var(--width-side-nav)" }}
       >
         {renderBody(collapsed, false)}
@@ -248,7 +239,7 @@ export function SideNav({
           />
           <aside
             aria-label="サイドナビゲーション"
-            className="absolute inset-y-0 left-0 flex w-[var(--width-side-nav)] flex-col overflow-hidden border-r border-border bg-white shadow-m"
+            className="absolute inset-y-0 left-0 flex w-[var(--width-side-nav)] flex-col overflow-hidden bg-grust-navy shadow-m"
           >
             {renderBody(false, true)}
           </aside>

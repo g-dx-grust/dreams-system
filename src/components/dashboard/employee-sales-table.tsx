@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { ChevronRight } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardBody } from "@/components/ui/card";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 
@@ -20,13 +21,7 @@ type EmployeeSubtotal = {
   paid_amount: number;
 };
 
-export function EmployeeSalesTable({
-  month,
-  rows,
-}: {
-  month: string;
-  rows: EmployeeSalesRow[];
-}) {
+export function EmployeeSalesTable({ month, rows }: { month: string; rows: EmployeeSalesRow[] }) {
   const router = useRouter();
 
   const totals = rows.reduce(
@@ -42,11 +37,8 @@ export function EmployeeSalesTable({
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-s">
-        <div className="flex items-baseline gap-s">
-          <CardTitle>担当者別 売上（日別・入金日ベース）</CardTitle>
-          <span className="text-s text-text-grey tabular-nums">全 {rows.length} 件</span>
-        </div>
+      <CardHeader className="flex flex-row items-center justify-between gap-s bg-white px-m py-m">
+        <CardTitle>担当者別 売上（入金日ベース）</CardTitle>
         <label className="flex items-center gap-xs text-s text-text-grey">
           表示月
           <input
@@ -61,52 +53,54 @@ export function EmployeeSalesTable({
         </label>
       </CardHeader>
       <CardBody className="p-0">
-        {rows.length === 0 ? (
+        {subtotals.length === 0 ? (
           <p className="px-m py-m text-s text-text-grey">この月の入金実績はありません。</p>
         ) : (
           <Table>
             <THead>
               <TR>
-                <TH>入金日</TH>
                 <TH>担当者</TH>
-                <TH numeric>件数</TH>
+                <TH numeric>案件数</TH>
                 <TH numeric>請求額</TH>
                 <TH numeric>入金額</TH>
+                <TH className="w-[48px]" />
               </TR>
             </THead>
             <TBody>
-              {rows.map((row, index) => (
-                <TR key={`${row.sale_date}-${row.assigned_user_id ?? "none"}-${index}`}>
-                  <TD className="whitespace-nowrap">{formatDate(row.sale_date)}</TD>
-                  <TD>{row.employee_name}</TD>
-                  <TD numeric>{row.case_count.toLocaleString("ja-JP")}</TD>
+              {subtotals.map((row) => (
+                <TR key={row.employee_name}>
+                  <TD>
+                    <div className="flex items-center gap-s">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-grey-7 text-xs font-semibold text-text-grey">
+                        {row.employee_name.slice(0, 1)}
+                      </span>
+                      <span className="font-semibold text-text-black">{row.employee_name}</span>
+                    </div>
+                  </TD>
+                  <TD numeric>{row.case_count.toLocaleString("ja-JP")} 件</TD>
                   <TD numeric>{formatYen(row.invoice_amount)}</TD>
-                  <TD numeric className="font-medium">{formatYen(row.paid_amount)}</TD>
+                  <TD numeric className="font-semibold">
+                    {formatYen(row.paid_amount)}
+                  </TD>
+                  <TD>
+                    <ChevronRight className="h-4 w-4 text-text-quaternary" aria-hidden="true" />
+                  </TD>
                 </TR>
               ))}
-            </TBody>
-            <tfoot className="border-t border-border bg-head">
-              {subtotals.map((sub) => (
-                <tr key={`subtotal-${sub.employee_name}`} className="border-b border-border">
-                  <TD className="text-text-grey">小計</TD>
-                  <TD className="text-text-grey">{sub.employee_name}</TD>
-                  <TD numeric className="text-text-grey">
-                    {sub.case_count.toLocaleString("ja-JP")}
-                  </TD>
-                  <TD numeric className="text-text-grey">{formatYen(sub.invoice_amount)}</TD>
-                  <TD numeric className="text-text-grey">{formatYen(sub.paid_amount)}</TD>
-                </tr>
-              ))}
-              <tr>
+              <TR>
                 <TD className="font-semibold">合計</TD>
-                <TD className="text-text-grey">—</TD>
                 <TD numeric className="font-semibold">
-                  {totals.case_count.toLocaleString("ja-JP")}
+                  {totals.case_count.toLocaleString("ja-JP")} 件
                 </TD>
-                <TD numeric className="font-semibold">{formatYen(totals.invoice_amount)}</TD>
-                <TD numeric className="font-bold">{formatYen(totals.paid_amount)}</TD>
-              </tr>
-            </tfoot>
+                <TD numeric className="font-semibold">
+                  {formatYen(totals.invoice_amount)}
+                </TD>
+                <TD numeric className="font-semibold">
+                  {formatYen(totals.paid_amount)}
+                </TD>
+                <TD />
+              </TR>
+            </TBody>
           </Table>
         )}
       </CardBody>
@@ -137,10 +131,4 @@ function computeSubtotals(rows: EmployeeSalesRow[]): EmployeeSubtotal[] {
 
 function formatYen(value: number): string {
   return `¥${(value ?? 0).toLocaleString("ja-JP")}`;
-}
-
-function formatDate(iso: string): string {
-  const [y, m, d] = iso.split("-");
-  if (!y || !m || !d) return iso;
-  return `${y}/${m}/${d}`;
 }

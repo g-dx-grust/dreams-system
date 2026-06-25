@@ -9,7 +9,7 @@
  */
 @theme {
   /* ==== Brand (legacy alias — 既存参照のために残す) ==== */
-  --color-grust-navy: #1f2329;
+  --color-grust-navy: #071a36;
   --color-grust-blue: #3370ff;
   --color-grust-light-blue: #4e83ff;
   --color-grust-accent: #3370ff;
@@ -125,8 +125,8 @@
 
   /* ==== Layout widths ==== */
   --width-content-max: 1200px;
-  --width-side-nav: 240px;
-  --height-app-header: 56px;
+  --width-side-nav: 260px;
+  --height-app-header: 72px;
 }
 
 html,

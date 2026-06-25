@@ -7,7 +7,7 @@ import { listCases, listAssignableUsers } from "@/server/cases";
 import { getCurrentUser } from "@/lib/permissions";
 import { CasesFilter } from "@/components/cases/cases-filter";
 import { CasesTable } from "@/components/cases/cases-table";
-import { isOverdue } from "@/lib/format";
+import { caseStatusLabel, isOverdue } from "@/lib/format";
 
 type Search = {
   q?: string;
@@ -57,12 +57,18 @@ export default async function CasesPage({ searchParams }: { searchParams: Promis
   const visibleOverdue = items.filter((item) => isOverdue(item.deadline_date, item.status)).length;
   const visibleInProgress = items.filter((item) => item.status === "in_progress").length;
   const visibleSubmitted = items.filter((item) => item.status === "submitted").length;
+  const visibleDueSoon = items.filter(
+    (item) =>
+      !isOverdue(item.deadline_date, item.status) &&
+      item.deadline_date != null &&
+      new Date(item.deadline_date) <= dateAfterDays(7),
+  ).length;
 
   return (
     <>
       <PageHeader
-        title="案件"
-        description="申請業務ごとに 1 案件として管理します。関係者・土地・金額・帳票を案件に紐付けます。"
+        title="案件一覧"
+        description="申請種別ごとに案件を登録・管理します。"
         actions={
           <Link href="/cases/new">
             <Button>案件を登録する</Button>
@@ -70,21 +76,30 @@ export default async function CasesPage({ searchParams }: { searchParams: Promis
         }
       />
 
-      <section className="mb-m grid grid-cols-2 gap-s lg:grid-cols-4" aria-label="案件一覧サマリ">
-        <SummaryTile label="全案件" value={total} note={`${rangeStart}〜${rangeEnd}件を表示`} />
-        <SummaryTile label="表示中の進行中" value={visibleInProgress} note="対応が進行中の案件" />
-        <SummaryTile label="表示中の提出済み" value={visibleSubmitted} note="提出後の確認対象" />
-        <SummaryTile
-          label="表示中の期限超過"
-          value={visibleOverdue}
-          note="締切日を過ぎた案件"
-          danger={visibleOverdue > 0}
-        />
-      </section>
-
-      <Card className="mb-m border-border-strong">
+      <Card className="mb-m">
         <CasesFilter users={users} />
       </Card>
+
+      <div className="mb-m flex flex-wrap gap-s" aria-label="ステータスで絞り込み">
+        <StatusTabLink href={statusHref(sp, "all")} active={!sp.status && sp.overdue !== "1"}>
+          すべて <Count value={total} />
+        </StatusTabLink>
+        <StatusTabLink href={statusHref(sp, "in_progress")} active={sp.status === "in_progress"}>
+          {caseStatusLabel("in_progress")} <Count value={visibleInProgress} />
+        </StatusTabLink>
+        <StatusTabLink href={statusHref(sp, "submitted")} active={sp.status === "submitted"}>
+          {caseStatusLabel("submitted")} <Count value={visibleSubmitted} />
+        </StatusTabLink>
+        <StatusTabLink href={statusHref(sp, "overdue")} active={sp.overdue === "1"}>
+          期限超過 <Count value={visibleOverdue} danger={visibleOverdue > 0} />
+        </StatusTabLink>
+        <StatusTabLink
+          href={statusHref(sp, "due_soon")}
+          active={sp.deadline_to === formatDateParam(dateAfterDays(7))}
+        >
+          期限間近 <Count value={visibleDueSoon} />
+        </StatusTabLink>
+      </div>
 
       <div className="mb-s flex items-center justify-between gap-m text-s text-text-grey">
         <p>
@@ -135,27 +150,74 @@ export default async function CasesPage({ searchParams }: { searchParams: Promis
   );
 }
 
-function SummaryTile({
-  label,
-  value,
-  note,
-  danger = false,
+function Count({ value, danger = false }: { value: number; danger?: boolean }) {
+  return (
+    <span
+      className={
+        danger
+          ? "ml-xs rounded-full bg-danger-soft px-xs py-xxs text-xs text-danger tabular-nums"
+          : "ml-xs rounded-full bg-grey-7 px-xs py-xxs text-xs text-text-grey tabular-nums"
+      }
+    >
+      {value.toLocaleString("ja-JP")}
+    </span>
+  );
+}
+
+function StatusTabLink({
+  href,
+  active,
+  children,
 }: {
-  label: string;
-  value: number;
-  note: string;
-  danger?: boolean;
+  href: string;
+  active: boolean;
+  children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-m border border-border bg-white px-m py-s shadow-s">
-      <p className="text-xs font-semibold text-text-grey">{label}</p>
-      <p className={danger ? "mt-xxs text-xl font-semibold text-danger" : "mt-xxs text-xl font-semibold text-text-black"}>
-        <span className="tabular-nums">{value.toLocaleString("ja-JP")}</span>
-        <span className="ml-xxs text-s font-normal text-text-grey">件</span>
-      </p>
-      <p className="mt-xxs text-xs text-text-quaternary">{note}</p>
-    </div>
+    <Link
+      href={href}
+      aria-current={active ? "page" : undefined}
+      className={
+        active
+          ? "inline-flex h-10 items-center rounded-full border border-main bg-white px-m text-s font-semibold text-main shadow-s"
+          : "inline-flex h-10 items-center rounded-full border border-border bg-white px-m text-s font-semibold text-text-grey hover:border-border-strong hover:text-text-black"
+      }
+    >
+      {children}
+    </Link>
   );
+}
+
+function statusHref(
+  search: Search,
+  status: "all" | "in_progress" | "submitted" | "overdue" | "due_soon",
+) {
+  const params = new URLSearchParams();
+  if (search.q) params.set("q", search.q);
+  if (search.type) params.set("type", search.type);
+  if (search.user) params.set("user", search.user);
+  if (search.deadline_from) params.set("deadline_from", search.deadline_from);
+  if (search.sort) params.set("sort", search.sort);
+  if (search.order) params.set("order", search.order);
+  if (status === "in_progress" || status === "submitted") params.set("status", status);
+  if (status === "overdue") params.set("overdue", "1");
+  if (status === "due_soon") params.set("deadline_to", formatDateParam(dateAfterDays(7)));
+  const qs = params.toString();
+  return qs ? `/cases?${qs}` : "/cases";
+}
+
+function dateAfterDays(days: number): Date {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() + days);
+  return date;
+}
+
+function formatDateParam(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function PaginationLink({

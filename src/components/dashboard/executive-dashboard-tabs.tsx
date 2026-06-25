@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import { BarChart3, LineChart, PieChart, Table2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { DashboardCards, type MonthlyTrendRow } from "@/components/dashboard/cards";
@@ -35,9 +34,9 @@ type Props = {
 };
 
 const VARIANTS: Array<{ key: Variant; label: string; description: string }> = [
-  { key: "operations", label: "パターンA", description: "現場運用" },
-  { key: "executive", label: "パターンB", description: "経営指標" },
-  { key: "ledger", label: "パターンC", description: "売上台帳" },
+  { key: "operations", label: "現場運用", description: "案件・期限" },
+  { key: "executive", label: "経営指標", description: "受注・売上" },
+  { key: "ledger", label: "売上台帳", description: "案件別" },
 ];
 
 const COLORS = [
@@ -66,46 +65,36 @@ export function ExecutiveDashboardTabs({
 
   return (
     <div className="space-y-m">
-      <Card>
-        <CardHeader>
-          <div className="flex flex-wrap items-center justify-between gap-s">
-            <CardTitle>ダッシュボード比較</CardTitle>
-            <Badge tone="warning">一時比較</Badge>
-          </div>
-        </CardHeader>
-        <CardBody>
-          <div className="flex flex-wrap gap-s" role="tablist" aria-label="ダッシュボード比較">
-            {VARIANTS.map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                role="tab"
-                aria-selected={variant === item.key}
-                onClick={() => setVariant(item.key)}
-                className={cn(
-                  "min-w-0 rounded-s border px-m py-s text-left text-s transition-colors",
-                  variant === item.key
-                    ? "border-main bg-main-soft text-main"
-                    : "border-border bg-white text-text-grey hover:border-border-strong hover:text-text-black",
-                )}
-              >
-                <span className="block font-semibold">{item.label}</span>
-                <span className="block text-xs">{item.description}</span>
-              </button>
-            ))}
-          </div>
-        </CardBody>
-      </Card>
+      <div className="flex flex-wrap gap-s" role="tablist" aria-label="ダッシュボード表示">
+        {VARIANTS.map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            role="tab"
+            aria-selected={variant === item.key}
+            onClick={() => setVariant(item.key)}
+            className={cn(
+              "inline-flex h-8 items-center gap-xs rounded-full border px-m text-s font-semibold transition-colors",
+              variant === item.key
+                ? "border-main bg-white text-main shadow-s"
+                : "border-border bg-white text-text-grey hover:border-border-strong hover:text-text-black",
+            )}
+          >
+            <span>{item.label}</span>
+            <span className="text-xs font-medium text-text-quaternary">{item.description}</span>
+          </button>
+        ))}
+      </div>
 
       {variant === "operations" && (
         <div className="space-y-m">
           <DashboardCards data={summary} monthly={monthlyRows} asOf={asOf} />
-          <div className="grid gap-m xl:grid-cols-2">
+          <div className="grid gap-m xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
+            <EmployeeSalesTable month={employeeMonth} rows={employeeRows} />
             <OverdueTable rows={overdueRows} />
-            <UnpaidTable rows={unpaidRows} />
           </div>
+          <UnpaidTable rows={unpaidRows} />
           <MonthlyChart rows={monthlyRows} />
-          <EmployeeSalesTable month={employeeMonth} rows={employeeRows} />
         </div>
       )}
 

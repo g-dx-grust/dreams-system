@@ -16,11 +16,7 @@ const FILE_TYPE_LABELS: Record<string, string> = {
  * 帳票履歴一覧の常設フィルタバー。選択は即時反映（URLクエリを更新）し、
  * 適用中フィルタをチップで可視化する。see: DESIGN.md §8.8
  */
-export function DocumentHistoryFilter({
-  templates,
-}: {
-  templates: DocumentTemplateOption[];
-}) {
+export function DocumentHistoryFilter({ templates }: { templates: DocumentTemplateOption[] }) {
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
@@ -93,7 +89,7 @@ export function DocumentHistoryFilter({
           <Input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="ファイル名・テンプレート名"
+            placeholder="案件番号・ファイル名で検索"
           />
         </label>
         <label className="flex flex-col gap-xs">

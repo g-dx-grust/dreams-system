@@ -3,6 +3,7 @@ export function isTemplateMappingWorkspace(pathname: string) {
 }
 
 export type RouteCrumb = { label: string; href?: string };
+export type RouteMeta = { number: string; title: string };
 
 const TOP_LABELS: Record<string, string> = {
   cases: "案件",
@@ -12,6 +13,16 @@ const TOP_LABELS: Record<string, string> = {
   templates: "テンプレート",
   users: "ユーザー管理",
   "audit-logs": "監査ログ",
+};
+
+const TOP_META: Record<string, RouteMeta> = {
+  cases: { number: "02", title: "案件一覧" },
+  map: { number: "03", title: "地図" },
+  persons: { number: "04", title: "関係者台帳" },
+  documents: { number: "05", title: "帳票履歴" },
+  templates: { number: "06", title: "テンプレート" },
+  users: { number: "08", title: "ユーザー管理" },
+  "audit-logs": { number: "07", title: "監査ログ" },
 };
 
 const SUB_LABELS: Record<string, string> = {
@@ -56,4 +67,10 @@ export function resolveBreadcrumb(pathname: string): RouteCrumb[] {
   });
 
   return crumbs;
+}
+
+export function resolveRouteMeta(pathname: string): RouteMeta {
+  const [segment] = pathname.split("/").filter(Boolean);
+  if (!segment) return { number: "01", title: "ダッシュボード" };
+  return TOP_META[segment] ?? { number: "00", title: TOP_LABELS[segment] ?? segment };
 }

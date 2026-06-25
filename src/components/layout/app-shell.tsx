@@ -58,7 +58,7 @@ export function AppShell({
   return (
     <>
       {skipLink}
-      <div className="flex h-screen overflow-hidden bg-grey-6">
+      <div className="flex h-screen overflow-hidden bg-background">
         <SideNav
           user={user}
           collapsed={collapsed}
@@ -74,7 +74,7 @@ export function AppShell({
           />
           <main
             id="main-content"
-            className="flex-1 overflow-x-hidden overflow-y-auto px-m py-m"
+            className="flex-1 overflow-x-hidden overflow-y-auto px-m py-l lg:px-xl"
           >
             <div className="mx-auto max-w-[var(--width-content-max)]">{children}</div>
           </main>

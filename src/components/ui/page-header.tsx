@@ -13,13 +13,13 @@ export function PageHeader({
   breadcrumb?: React.ReactNode;
 }) {
   return (
-    <div className="-mx-m mb-m border-b border-border bg-white px-m py-m">
+    <div className="mb-l">
       {breadcrumb && <div className="mb-xs">{breadcrumb}</div>}
       <div className="flex min-h-10 flex-wrap items-start justify-between gap-m">
         <div className="min-w-0">
-          <h1 className="text-xl font-semibold leading-tight text-text-black">{title}</h1>
+          <h1 className="text-xxl font-semibold leading-tight text-text-black">{title}</h1>
           {description && (
-            <p className="mt-xxs max-w-[56rem] text-s leading-relaxed text-text-grey">
+            <p className="mt-xs max-w-[56rem] text-s leading-relaxed text-text-grey">
               {description}
             </p>
           )}

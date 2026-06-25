@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { Empty } from "@/components/ui/empty";
 import { SortHeader } from "@/components/common/sort-header";
-import { listPersons } from "@/server/persons";
+import { listPersons, type PersonRow } from "@/server/persons";
 import { PersonsFilter } from "@/components/persons/persons-filter";
 import { casePersonRoleLabel, formatDate, addressFull } from "@/lib/format";
 
@@ -43,7 +43,7 @@ export default async function PersonsPage({ searchParams }: { searchParams: Prom
     <>
       <PageHeader
         title="関係者台帳"
-        description="申請者・所有者などの情報を先に整えておくと、案件へ紐付けるだけで各様式へ反映できます。"
+        description="申請者・所有者などの関係者情報を管理します。"
         actions={
           <Link href="/persons/new">
             <Button>関係者を登録する</Button>
@@ -54,6 +54,24 @@ export default async function PersonsPage({ searchParams }: { searchParams: Prom
       <Card className="mb-m">
         <PersonsFilter />
       </Card>
+
+      <div className="mb-m flex flex-wrap gap-s" aria-label="関係者の役割で絞り込み">
+        <LedgerTab href={ledgerHref(sp, null)} active={!sp.q}>
+          すべて <Count value={total} />
+        </LedgerTab>
+        <LedgerTab href={ledgerHref(sp, "申請者")} active={sp.q === "申請者"}>
+          申請者 <Count value={countRole(items, "applicant")} />
+        </LedgerTab>
+        <LedgerTab href={ledgerHref(sp, "譲渡人")} active={sp.q === "譲渡人"}>
+          譲渡人 <Count value={countRole(items, "transferor")} />
+        </LedgerTab>
+        <LedgerTab href={ledgerHref(sp, "隣地所有者")} active={sp.q === "隣地所有者"}>
+          隣地所有者 <Count value={countRole(items, "neighbor")} />
+        </LedgerTab>
+        <LedgerTab href={ledgerHref(sp, "請求先")} active={sp.q === "請求先"}>
+          請求先 <Count value={countRole(items, "billing")} />
+        </LedgerTab>
+      </div>
 
       <div className="mb-s flex items-center justify-between gap-m text-s text-text-grey">
         <p>
@@ -142,6 +160,52 @@ export default async function PersonsPage({ searchParams }: { searchParams: Prom
       )}
     </>
   );
+}
+
+function Count({ value }: { value: number }) {
+  return (
+    <span className="ml-xs rounded-full bg-grey-7 px-xs py-xxs text-xs text-text-grey tabular-nums">
+      {value.toLocaleString("ja-JP")}
+    </span>
+  );
+}
+
+function LedgerTab({
+  href,
+  active,
+  children,
+}: {
+  href: string;
+  active: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      aria-current={active ? "page" : undefined}
+      className={
+        active
+          ? "inline-flex h-9 items-center rounded-full border border-main bg-white px-m text-s font-semibold text-main shadow-s"
+          : "inline-flex h-9 items-center rounded-full border border-border bg-white px-m text-s font-semibold text-text-grey hover:border-border-strong hover:text-text-black"
+      }
+    >
+      {children}
+    </Link>
+  );
+}
+
+function countRole(items: PersonRow[], role: string) {
+  return items.filter((item) => item.default_case_role === role).length;
+}
+
+function ledgerHref(search: Search, query: string | null) {
+  const params = new URLSearchParams();
+  if (query) params.set("q", query);
+  if (search.type) params.set("type", search.type);
+  if (search.sort) params.set("sort", search.sort);
+  if (search.order) params.set("order", search.order);
+  const qs = params.toString();
+  return qs ? `/persons?${qs}` : "/persons";
 }
 
 function PaginationLink({

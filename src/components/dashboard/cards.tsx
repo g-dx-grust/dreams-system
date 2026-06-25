@@ -1,6 +1,9 @@
 import Link from "next/link";
-import { Card, CardHeader, CardTitle } from "@/components/ui/card";
+import { AlertTriangle, ClipboardList, Clock3, Send } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/cn";
 
 type SummaryData = {
   total_cases: number;
@@ -19,7 +22,7 @@ export type MonthlyTrendRow = {
   paid_amount: number;
 };
 
-type Tone = "neutral" | "danger" | "warning";
+type Tone = "main" | "info" | "warning" | "success";
 
 type Metric = {
   label: string;
@@ -27,8 +30,11 @@ type Metric = {
   unit: string;
   href: string;
   tone: Tone;
+  icon: LucideIcon;
   delta: number | null;
   ratio: number | null;
+  trend: number[];
+  badge?: string;
 };
 
 const EMPTY_SUMMARY: SummaryData = {
@@ -52,7 +58,7 @@ function deltaOf(series: number[]): { delta: number | null; ratio: number | null
 export function DashboardCards({
   data,
   monthly,
-  asOf,
+  asOf: _asOf,
 }: {
   data: SummaryData | null;
   monthly: MonthlyTrendRow[];
@@ -61,8 +67,12 @@ export function DashboardCards({
   const d = data ?? EMPTY_SUMMARY;
   const dueSoonHref = `/cases?deadline_to=${dateAfterDays(7)}`;
 
-  const newCasesTrend = deltaOf(monthly.map((m) => m.new_cases));
-  const completedTrend = deltaOf(monthly.map((m) => m.completed_cases));
+  const newCases = monthly.map((m) => m.new_cases);
+  const completed = monthly.map((m) => m.completed_cases);
+  const invoice = monthly.map((m) => Math.round((m.invoice_amount ?? 0) / 10000));
+  const paid = monthly.map((m) => Math.round((m.paid_amount ?? 0) / 10000));
+  const newCasesTrend = deltaOf(newCases);
+  const completedTrend = deltaOf(completed);
 
   const metrics: Metric[] = [
     {
@@ -70,129 +80,137 @@ export function DashboardCards({
       value: d.total_cases,
       unit: "件",
       href: "/cases",
-      tone: "neutral",
+      tone: "main",
+      icon: ClipboardList,
       delta: newCasesTrend.delta,
       ratio: newCasesTrend.ratio,
+      trend: newCases,
     },
     {
       label: "進行中",
       value: d.in_progress,
       unit: "件",
       href: "/cases?status=in_progress",
-      tone: "neutral",
+      tone: "info",
+      icon: Send,
       delta: completedTrend.delta,
       ratio: completedTrend.ratio,
+      trend: completed,
     },
     {
       label: "期限超過",
       value: d.overdue,
       unit: "件",
       href: "/cases?overdue=1",
-      tone: d.overdue > 0 ? "danger" : "neutral",
+      tone: "warning",
+      icon: AlertTriangle,
       delta: null,
       ratio: null,
+      trend: invoice,
+      badge: d.overdue > 0 ? "要対応" : undefined,
     },
     {
       label: "期限間近（7日以内）",
       value: d.due_soon,
       unit: "件",
       href: dueSoonHref,
-      tone: d.due_soon > 0 ? "warning" : "neutral",
+      tone: "success",
+      icon: Clock3,
       delta: null,
       ratio: null,
+      trend: paid,
     },
   ];
 
   return (
-    <section aria-label="案件サマリ">
-      <Card className="border-border-strong">
-        <div className="grid lg:grid-cols-4">
-          <div className="bg-grust-navy px-m py-m text-white lg:col-span-1">
-            <p className="text-xs font-semibold text-white/70">本日の要対応</p>
-            <p className="mt-xs text-xxl font-semibold leading-none tabular-nums">
-              {(d.overdue + d.due_soon).toLocaleString("ja-JP")}
-              <span className="ml-xs text-s font-normal text-white/70">件</span>
-            </p>
-            <div className="mt-m grid grid-cols-2 gap-s">
-              <Link
-                href="/cases?overdue=1"
-                className="rounded-s border border-white/20 bg-white/10 px-s py-s text-white transition-colors hover:bg-white/20"
-              >
-                <span className="block text-xs text-white/70">期限超過</span>
-                <span className="mt-xxs block text-l font-semibold tabular-nums">
-                  {d.overdue.toLocaleString("ja-JP")} 件
-                </span>
-              </Link>
-              <Link
-                href={dueSoonHref}
-                className="rounded-s border border-white/20 bg-white/10 px-s py-s text-white transition-colors hover:bg-white/20"
-              >
-                <span className="block text-xs text-white/70">7日以内</span>
-                <span className="mt-xxs block text-l font-semibold tabular-nums">
-                  {d.due_soon.toLocaleString("ja-JP")} 件
-                </span>
-              </Link>
-            </div>
-            <p className="mt-m text-xs text-white/60 tabular-nums">集計時点: {asOf}</p>
-          </div>
-
-          <div className="lg:col-span-3">
-            <CardHeader className="flex flex-wrap items-center justify-between gap-s">
-              <CardTitle>案件サマリ</CardTitle>
-              <p className="text-xs text-text-quaternary">主要指標</p>
-            </CardHeader>
-            <div className="grid grid-cols-1 gap-px bg-border sm:grid-cols-2 xl:grid-cols-4">
-              {metrics.map((metric, index) => (
-                <MetricCell
-                  key={metric.label}
-                  metric={metric}
-                  isNewCases={index === 0}
-                  isCompleted={index === 1}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-      </Card>
+    <section className="grid gap-m md:grid-cols-2 xl:grid-cols-4" aria-label="案件サマリ">
+      {metrics.map((metric) => (
+        <MetricCard key={metric.label} metric={metric} />
+      ))}
     </section>
   );
 }
 
-function MetricCell({
-  metric,
-  isNewCases,
-  isCompleted,
-}: {
-  metric: Metric;
-  isNewCases: boolean;
-  isCompleted: boolean;
-}) {
-  const trendLabel = isNewCases ? "新規" : isCompleted ? "完了" : null;
+function MetricCard({ metric }: { metric: Metric }) {
+  const Icon = metric.icon;
 
   return (
-    <Link href={metric.href} className="block bg-white p-m transition-colors hover:bg-grey-5">
-      <div className="flex items-center justify-between gap-s">
-        <p className="text-s font-medium text-text-grey">{metric.label}</p>
-        {metric.tone !== "neutral" && <Badge tone={metric.tone}>要対応</Badge>}
-      </div>
-      <p className="mt-xs text-xl font-semibold leading-tight tabular-nums text-text-black">
-        {metric.value.toLocaleString("ja-JP")}
-        <span className="ml-xs text-s font-normal text-text-grey">{metric.unit}</span>
-      </p>
-      {trendLabel !== null && (
-        <p className="mt-xs text-xs text-text-grey tabular-nums">
-          {trendLabel}前月比 {formatDelta(metric.delta)}
-          {metric.ratio !== null && (
-            <span className="text-text-quaternary">（{formatRatio(metric.ratio)}）</span>
-          )}
-        </p>
-      )}
+    <Link href={metric.href} className="group block min-w-0">
+      <Card className="h-full p-m transition-colors group-hover:border-border-strong">
+        <div className="flex items-start justify-between gap-s">
+          <div className="flex items-center gap-s">
+            <span
+              className={cn(
+                "flex h-9 w-9 shrink-0 items-center justify-center rounded-full border",
+                metric.tone === "main" && "border-main/20 bg-main-soft text-main",
+                metric.tone === "info" && "border-main/20 bg-main-soft text-main",
+                metric.tone === "warning" && "border-warning/20 bg-warning-soft text-warning",
+                metric.tone === "success" && "border-success/20 bg-success-soft text-success",
+              )}
+            >
+              <Icon className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <p className="text-s font-semibold text-text-black">{metric.label}</p>
+          </div>
+          {metric.badge && <Badge tone="danger">{metric.badge}</Badge>}
+        </div>
+
+        <div className="mt-m flex items-end justify-between gap-m">
+          <div className="min-w-0">
+            <p className="text-xxl font-semibold leading-none text-text-black tabular-nums">
+              {metric.value.toLocaleString("ja-JP")}
+              <span className="ml-xs text-m font-normal text-text-grey">{metric.unit}</span>
+            </p>
+            <p className="mt-xs text-xs text-text-grey tabular-nums">
+              前月比 {formatDelta(metric.delta)}
+              {metric.ratio !== null && (
+                <span className="text-text-quaternary">（{formatRatio(metric.ratio)}）</span>
+              )}
+            </p>
+          </div>
+          <Sparkline values={metric.trend} tone={metric.tone} />
+        </div>
+      </Card>
     </Link>
   );
 }
 
+function Sparkline({ values, tone }: { values: number[]; tone: Tone }) {
+  const padded = values.length >= 2 ? values.slice(-10) : [0, ...values, 0];
+  const max = Math.max(...padded, 1);
+  const width = 112;
+  const height = 42;
+  const points = padded
+    .map((value, index) => {
+      const x = (width / Math.max(padded.length - 1, 1)) * index;
+      const y = height - (value / max) * (height - 8) - 4;
+      return `${x},${y}`;
+    })
+    .join(" ");
+  const stroke =
+    tone === "warning"
+      ? "var(--color-warning)"
+      : tone === "success"
+        ? "var(--color-success)"
+        : "var(--color-main)";
+
+  return (
+    <svg
+      className="hidden shrink-0 sm:block"
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      role="img"
+      aria-label="推移"
+    >
+      <polyline points={points} fill="none" stroke={stroke} strokeWidth={2} />
+      <line x1="0" y1={height - 1} x2={width} y2={height - 1} stroke="var(--color-border)" />
+    </svg>
+  );
+}
+
 function formatDelta(delta: number | null): string {
-  if (delta === null) return "—";
+  if (delta === null) return "±0 件";
   if (delta === 0) return "±0 件";
   const sign = delta > 0 ? "+" : "▲";
   return `${sign}${Math.abs(delta).toLocaleString("ja-JP")} 件`;

@@ -1,6 +1,6 @@
 import Link from "next/link";
+import { AlertTriangle, ChevronRight } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardBody } from "@/components/ui/card";
-import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { caseStatusLabel, caseStatusTone } from "@/lib/format";
 
@@ -15,17 +15,13 @@ type OverdueRow = {
 };
 
 export function OverdueTable({ rows }: { rows: OverdueRow[] }) {
-  // 既定は締切昇順（残日数の少ない順）。差し迫った案件を上に。see: DESIGN.md §8.4
   const sorted = [...rows].sort((a, b) => a.days_remaining - b.days_remaining);
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-s">
-        <div className="flex items-baseline gap-s">
-          <CardTitle>期限超過・期限間近の案件</CardTitle>
-          <span className="text-s text-text-grey tabular-nums">全 {rows.length} 件</span>
-        </div>
-        <Link href="/cases?overdue=1" className="ui-link text-s">
+      <CardHeader className="flex flex-row items-center justify-between gap-s bg-white px-m py-m">
+        <CardTitle>期限超過・期限間近の案件</CardTitle>
+        <Link href="/cases?overdue=1" className="ui-link text-s font-semibold">
           すべて見る
         </Link>
       </CardHeader>
@@ -33,53 +29,42 @@ export function OverdueTable({ rows }: { rows: OverdueRow[] }) {
         {sorted.length === 0 ? (
           <p className="px-m py-m text-s text-text-grey">該当案件はありません。</p>
         ) : (
-          <Table>
-            <THead>
-              <TR>
-                <TH>案件番号</TH>
-                <TH>案件名</TH>
-                <TH>担当者</TH>
-                <TH>締切日</TH>
-                <TH>ステータス</TH>
-                <TH numeric>残日数</TH>
-              </TR>
-            </THead>
-            <TBody>
-              {sorted.map((row) => {
-                const overdue = row.days_remaining < 0;
-                return (
-                  <TR key={row.id}>
-                    <TD>
-                      <Link href={`/cases/${row.id}`} className="ui-link whitespace-nowrap">
+          <ul className="divide-y divide-border">
+            {sorted.slice(0, 8).map((row) => {
+              const overdue = row.days_remaining < 0;
+              return (
+                <li key={row.id}>
+                  <Link
+                    href={`/cases/${row.id}`}
+                    className="grid grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-s px-m py-s hover:bg-grey-5"
+                  >
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full text-danger">
+                      <AlertTriangle className="h-5 w-5" aria-hidden="true" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-xs text-text-grey tabular-nums">
                         {row.case_number}
-                      </Link>
-                    </TD>
-                    <TD>{row.case_name}</TD>
-                    <TD className="text-text-grey">{row.assigned_user ?? "—"}</TD>
-                    <TD className="tabular-nums whitespace-nowrap">{formatDate(row.deadline_date)}</TD>
-                    <TD>
+                      </span>
+                      <span className="block truncate text-s font-semibold text-text-black">
+                        {row.case_name}
+                      </span>
+                    </span>
+                    <span className="flex items-center gap-s">
                       <Badge tone={caseStatusTone(row.status)}>{caseStatusLabel(row.status)}</Badge>
-                    </TD>
-                    <TD numeric>
-                      {overdue ? (
-                        <Badge tone="danger">{row.days_remaining} 日</Badge>
-                      ) : (
-                        <Badge tone="warning">残 {row.days_remaining} 日</Badge>
-                      )}
-                    </TD>
-                  </TR>
-                );
-              })}
-            </TBody>
-          </Table>
+                      <Badge tone={overdue ? "danger" : "warning"}>
+                        {overdue
+                          ? `期限超過 ${row.days_remaining} 日`
+                          : `残 ${row.days_remaining} 日`}
+                      </Badge>
+                      <ChevronRight className="h-4 w-4 text-text-quaternary" aria-hidden="true" />
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
         )}
       </CardBody>
     </Card>
   );
-}
-
-function formatDate(iso: string): string {
-  const [y, m, d] = iso.split("-");
-  if (!y || !m || !d) return iso;
-  return `${y}/${m}/${d}`;
 }
