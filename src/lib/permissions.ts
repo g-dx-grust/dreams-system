@@ -7,6 +7,7 @@ export type AppUser = {
   id: string;
   email: string;
   fullName: string | null;
+  avatarUrl: string | null;
   role: AppRole;
   isActive: boolean;
 };
@@ -25,7 +26,7 @@ export const getCurrentUser = cache(async (): Promise<AppUser | null> => {
 
   const { data, error } = await supabase
     .from("users")
-    .select("id, email, full_name, role, is_active")
+    .select("id, email, full_name, avatar_url, role, is_active")
     .eq("id", user.id)
     .single();
 
@@ -35,6 +36,7 @@ export const getCurrentUser = cache(async (): Promise<AppUser | null> => {
     id: data.id,
     email: data.email,
     fullName: data.full_name,
+    avatarUrl: data.avatar_url,
     role: data.role as AppRole,
     isActive: data.is_active,
   };

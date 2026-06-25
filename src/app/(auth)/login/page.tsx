@@ -1,17 +1,26 @@
 "use client";
 
-import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/field";
 import { signInWithEmailPassword } from "@/server/auth";
 
-const LARK_PROVIDER = (process.env.NEXT_PUBLIC_SUPABASE_LARK_PROVIDER ??
-  "custom:lark") as `custom:${string}`;
 const IS_DEVELOPMENT = process.env.NODE_ENV !== "production";
 const PASSWORD_LOGIN_ENABLED =
   IS_DEVELOPMENT || process.env.NEXT_PUBLIC_ENABLE_PASSWORD_LOGIN !== "false";
+
+const LOGIN_ERROR_MESSAGES: Record<string, string> = {
+  lark_not_configured: "Larkログイン設定が不足しています。管理者に確認してください。",
+  lark_provider_error: "Larkログインが完了しませんでした。もう一度お試しください。",
+  lark_missing_code: "Larkログインの認証コードを受け取れませんでした。もう一度お試しください。",
+  lark_invalid_state: "ログイン状態の確認に失敗しました。もう一度お試しください。",
+  lark_token_failed: "Larkログインの認証に失敗しました。時間をおいて再度お試しください。",
+  lark_profile_failed:
+    "Larkアカウント情報を取得できませんでした。Larkアプリの権限設定を確認してください。",
+  inactive_user: "このアカウントは無効です。管理者に確認してください。",
+  auth_callback_failed: "ログイン処理に失敗しました。時間をおいて再度お試しください。",
+};
 
 export default function LoginPage() {
   const [larkPending, setLarkPending] = useState(false);
@@ -23,20 +32,24 @@ export default function LoginPage() {
 
   const pending = larkPending || emailPending;
 
-  const signInWithLark = async () => {
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const errorCode = searchParams.get("error");
+    if (errorCode) {
+      setError(
+        LOGIN_ERROR_MESSAGES[errorCode] ?? "ログインに失敗しました。もう一度お試しください。",
+      );
+    }
+  }, []);
+
+  const signInWithLark = () => {
     setLarkPending(true);
     setError(null);
-    const supabase = createClient();
-    const { error: err } = await supabase.auth.signInWithOAuth({
-      provider: LARK_PROVIDER,
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
-    if (err) {
-      setError("ログインに失敗しました。もう一度お試しください。");
-      setLarkPending(false);
-    }
+    const loginUrl = new URL("/auth/lark/start", window.location.origin);
+    const searchParams = new URLSearchParams(window.location.search);
+    const next = searchParams.get("next");
+    if (next) loginUrl.searchParams.set("next", next);
+    window.location.assign(loginUrl.toString());
   };
 
   const signInWithEmail = async (e: React.FormEvent) => {

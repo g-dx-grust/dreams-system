@@ -46,6 +46,7 @@ CREATE TABLE public.users (
     id              UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     email           TEXT NOT NULL UNIQUE,       -- auth.users.email と同期
     full_name       TEXT,
+    avatar_url      TEXT,
     role            TEXT NOT NULL DEFAULT 'user'
                     CHECK (role IN ('admin', 'user')),
     is_active       BOOLEAN NOT NULL DEFAULT TRUE,
@@ -58,8 +59,13 @@ CREATE TABLE public.users (
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-    INSERT INTO public.users (id, email, full_name)
-    VALUES (NEW.id, NEW.email, COALESCE(NEW.raw_user_meta_data->>'full_name', ''));
+    INSERT INTO public.users (id, email, full_name, avatar_url)
+    VALUES (
+        NEW.id,
+        NEW.email,
+        COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name', ''),
+        NULLIF(COALESCE(NEW.raw_user_meta_data->>'avatar_url', NEW.raw_user_meta_data->>'picture'), '')
+    );
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -69,7 +75,7 @@ CREATE TRIGGER on_auth_user_created
     FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 ```
 
-> パスワードハッシュは Supabase Auth が管理するため `hashed_password` は保持しない。SSO（Google Workspace）を採用する場合は `auth.identities` 側で管理される。
+> パスワードハッシュは Supabase Auth が管理するため `hashed_password` は保持しない。Larkログインではアプリ側 Route Handler が Lark OAuth の user_info を取得し、Supabase Auth のメールセッションへ接続する。プロフィール画像は Lark の user_info から `avatar_url` に同期し、未取得時は UI 側で頭文字表示にフォールバックする。
 
 ### persons（人マスタ）
 

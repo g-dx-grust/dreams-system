@@ -4,11 +4,13 @@
 
 **Supabase Auth** を採用する。独自 JWT（python-jose）、独自パスワードハッシュ、独自セッション管理は**一切実装しない**。
 
-- **プロバイダ**：Google Workspace SSO（第一選択、ドメイン `@n-grust.co.jp` 制限）
+- **プロバイダ**：Lark SSO（第一選択、Next.js Route Handler で Lark OAuth code を直接処理）
 - **メール + パスワード**：バックアップ手段として有効化（初期管理者や SSO 未付与ユーザー用）
 - **セッション**：Supabase が発行する JWT を Cookie ベースで保持（`@supabase/ssr` を使用）
 - **有効期限**：Supabase Auth のデフォルト（アクセストークン 1 時間、リフレッシュトークン 自動）
 - **パスワードハッシュ**：Supabase 側（bcrypt 同等）
+
+Lark 側ではカスタムアプリを作成し、Vercel 環境変数の `LARK_APP_ID` / `LARK_APP_SECRET` で code 交換を行う。Supabase Auth の Custom OAuth/OIDC Provider は使わない。Lark Developer のリダイレクト URL には `https://<app-domain>/auth/lark/callback` を登録する。プロフィール画像は Lark の user_info から `public.users.avatar_url` に同期し、未取得時は UI 側で頭文字表示にフォールバックする。
 
 ---
 
@@ -56,7 +58,8 @@ import { redirect } from "next/navigation";
 export type AppUser = {
   id: string;
   email: string;
-  fullName: string;
+  fullName: string | null;
+  avatarUrl: string | null;
   role: "admin" | "user";
   isActive: boolean;
 };
@@ -71,7 +74,7 @@ export async function getCurrentUser(): Promise<AppUser | null> {
 
   const { data: profile } = await supabase
     .from("users")
-    .select("id, email, full_name, role, is_active")
+    .select("id, email, full_name, avatar_url, role, is_active")
     .eq("id", user.id)
     .single();
   if (!profile || !profile.is_active) return null;
@@ -80,6 +83,7 @@ export async function getCurrentUser(): Promise<AppUser | null> {
     id: profile.id,
     email: profile.email,
     fullName: profile.full_name ?? "",
+    avatarUrl: profile.avatar_url,
     role: profile.role as "admin" | "user",
     isActive: profile.is_active,
   };
@@ -155,7 +159,7 @@ export async function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;
   const isPublic =
     path.startsWith("/login") ||
-    path.startsWith("/callback") ||
+    path.startsWith("/auth") ||
     path.startsWith("/_next") ||
     path === "/favicon.ico";
   if (!user && !isPublic) {
@@ -177,67 +181,36 @@ export const config = {
 ```tsx
 // src/app/(auth)/login/page.tsx
 "use client";
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 
 export default function LoginPage() {
-  const supabase = createClient();
-
-  const signInWithGoogle = async () => {
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/callback`,
-        queryParams: { hd: "n-grust.co.jp" }, // ドメイン制限
-      },
-    });
+  const signInWithLark = async () => {
+    window.location.assign(`${window.location.origin}/auth/lark/start`);
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-white/10 bg-grust-navy text-text-white">
-        <div className="mx-auto flex h-[56px] max-w-[1200px] items-center px-l">
-          <div>
-            <p className="text-xs font-bold text-white/70">G-DX</p>
-            <p className="text-base font-bold">案件管理・帳票転記システム</p>
-          </div>
+    <div className="flex min-h-screen items-center justify-center bg-grey-6 px-m py-xl">
+      <main className="w-full max-w-[400px] rounded-m border border-border bg-white shadow-s">
+        <div className="border-b border-border bg-grey-5 px-l py-m">
+          <h1 className="text-l font-semibold text-text-black">案件管理・帳票転記システム</h1>
+          <p className="mt-s text-s text-text-grey">
+            Larkアカウント、または登録済みのメールアドレスでログインしてください。
+          </p>
         </div>
-      </header>
-
-      <main className="mx-auto grid max-w-[1200px] gap-l px-l py-xxl lg:grid-cols-[minmax(0,1.3fr)_420px]">
-        <section className="rounded-m border border-border bg-white shadow-s">
-          <div className="border-b border-border px-l py-l">
-            <h1 className="text-xxl font-bold leading-tight">
-              測量・許認可業務の情報を、一つの画面体系で管理する
-            </h1>
-            <p className="mt-s text-sm text-text-grey">
-              案件、関係者、土地情報、金額、帳票生成を分断せずにつなぎます。
-            </p>
-          </div>
-        </section>
-
-        <section className="rounded-m border border-border bg-white shadow-m">
-          <div className="border-b border-border px-l py-l">
-            <h2 className="text-l font-bold">ログイン</h2>
-            <p className="mt-xs text-sm text-text-grey">
-              グラスト Google Workspace アカウントでログインしてください。
-            </p>
-          </div>
-          <div className="px-l py-l">
-            <Button className="w-full" onClick={signInWithGoogle}>
-              Google でログインする
-            </Button>
-          </div>
-        </section>
+        <div className="px-l py-m">
+          <Button className="w-full" onClick={signInWithLark}>
+            Larkでログインする
+          </Button>
+        </div>
       </main>
     </div>
   );
 }
 ```
 
-### Google 以外の認証が必要な場合
+### メールログイン
 
-Phase 5 初期では Google SSO のみ提供。将来的にメール + パスワードを有効化する場合は Supabase Dashboard で Email Provider を有効にし、ログインフォームを追加する。
+Lark SSO を第一選択にする。メール + パスワードはバックアップ手段として残し、`NEXT_PUBLIC_ENABLE_PASSWORD_LOGIN=false` の場合は本番 UI から非表示にする。
 
 ---
 
@@ -309,17 +282,17 @@ export async function inviteUser(input: {
 
 認証・権限関連で記録するイベント：
 
-| アクション                      | 発生場所                       | 詳細                          |
-| ------------------------------- | ------------------------------ | ----------------------------- |
+| アクション                      | 発生場所                                           | 詳細                          |
+| ------------------------------- | -------------------------------------------------- | ----------------------------- |
 | `auth.login_success`            | メールログイン Server Action / Lark OAuth callback | ユーザー ID、IP               |
 | `auth.login_failure`            | メールログイン Server Action / Lark OAuth callback | メール、IP、失敗理由          |
-| `user.invite`                   | `inviteUser` Server Action     | email, role                   |
-| `user.role_change`              | `updateUserRole` Server Action | before/after                  |
-| `user.deactivate`               | `deactivateUser` Server Action | userId                        |
-| `person.resync`                 | `resyncCasePerson`             | case_person_id, before/after  |
-| `template.upload`               | `uploadTemplate`               | template_id, version          |
-| `document.generate`             | `generateDocument`             | case_id, template_id, version |
-| `case.delete` / `person.delete` | 各削除 Server Action           | before                        |
+| `user.invite`                   | `inviteUser` Server Action                         | email, role                   |
+| `user.role_change`              | `updateUserRole` Server Action                     | before/after                  |
+| `user.deactivate`               | `deactivateUser` Server Action                     | userId                        |
+| `person.resync`                 | `resyncCasePerson`                                 | case_person_id, before/after  |
+| `template.upload`               | `uploadTemplate`                                   | template_id, version          |
+| `document.generate`             | `generateDocument`                                 | case_id, template_id, version |
+| `case.delete` / `person.delete` | 各削除 Server Action                               | before                        |
 
 ログイン成功・失敗はアプリ側の `audit_logs` に記録する。失敗時は `user_id = null` とし、パスワードや認証コードは保存しない。Supabase Auth Logs は補助的な確認先として扱う。
 
