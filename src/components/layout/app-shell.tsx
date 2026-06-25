@@ -60,7 +60,7 @@ export function AppShell({
   return (
     <>
       {skipLink}
-      <div className="flex h-screen overflow-hidden bg-background">
+      <div className="flex h-screen overflow-hidden bg-grey-6">
         <SideNav
           user={user}
           collapsed={collapsed}
@@ -74,7 +74,10 @@ export function AppShell({
             signOutAction={signOutAction}
             onHamburger={() => setMobileOpen(true)}
           />
-          <main id="main-content" className="flex-1 overflow-x-hidden overflow-y-auto p-m">
+          <main
+            id="main-content"
+            className="flex-1 overflow-x-hidden overflow-y-auto px-m py-m"
+          >
             <div
               className={cn(
                 "mx-auto",

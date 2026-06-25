@@ -72,10 +72,7 @@ async function loginWithDevelopmentForm(page: Page) {
   const email = requireEnv("SCREENSHOT_EMAIL", credentials.email);
   const password = requireEnv("SCREENSHOT_PASSWORD", credentials.password);
 
-  await openAndExpect(page, "/login", "ログイン", "h2");
-  await expect(page.locator("h3").filter({ hasText: "開発環境用ログイン" }).first()).toBeVisible({
-    timeout: 10_000,
-  });
+  await openAndExpect(page, "/login", "案件管理・帳票転記システム", "h1");
 
   await page.getByPlaceholder("user@example.com").fill(email);
   await page.getByPlaceholder("パスワード").fill(password);
@@ -159,8 +156,8 @@ test.describe("manual screenshots", () => {
     await capture(page, {
       fileName: "01-login.png",
       url: "/login",
-      heading: "ログイン",
-      headingTag: "h2",
+      heading: "案件管理・帳票転記システム",
+      headingTag: "h1",
     });
 
     await loginWithDevelopmentForm(page);

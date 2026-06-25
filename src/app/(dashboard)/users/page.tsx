@@ -3,11 +3,10 @@ import { getCurrentUser } from "@/lib/permissions";
 import { listUsers } from "@/server/users";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardHeader, CardTitle, CardBody } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Empty } from "@/components/ui/empty";
 import { UsersFilter } from "@/components/users/users-filter";
 import { UserListTable } from "@/components/users/user-list-table";
-import { UserInviteForm } from "@/components/users/user-invite-form";
+import { UserInviteDialog } from "@/components/users/user-invite-dialog";
 
 type Search = {
   q?: string;
@@ -42,6 +41,7 @@ export default async function UsersPage({
       <PageHeader
         title="ユーザー管理"
         description="システムにアクセスできるユーザーを管理します。"
+        actions={<UserInviteDialog />}
       />
       <div className="space-y-l">
         <Card>
@@ -62,28 +62,12 @@ export default async function UsersPage({
             {total === 0 ? (
               <Empty
                 title="該当するユーザーがいません"
-                hint="絞り込み条件を変えるか、「ユーザーを招待する」から追加してください。"
-                action={
-                  <a href="#invite">
-                    <Button>ユーザーを招待する</Button>
-                  </a>
-                }
+                hint="絞り込み条件を変えるか、ユーザーを追加してください。"
+                action={<UserInviteDialog variant="secondary" />}
               />
             ) : (
               <UserListTable rows={users} currentUserId={currentUser.id} />
             )}
-          </CardBody>
-        </Card>
-
-        <Card id="invite">
-          <CardHeader>
-            <CardTitle>ユーザーを招待する</CardTitle>
-          </CardHeader>
-          <CardBody>
-            <p className="mb-m text-s text-text-grey">
-              招待メールを送信します。ユーザーはメールに記載のリンクからパスワードを設定してログインできます。
-            </p>
-            <UserInviteForm />
           </CardBody>
         </Card>
       </div>

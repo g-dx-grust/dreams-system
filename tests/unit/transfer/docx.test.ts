@@ -254,4 +254,42 @@ describe("fillDocx", () => {
     expect(text).toContain("氏名 田中太郎 ㊞");
     expect(xml).not.toContain("eq \\o\\ac");
   });
+
+  it("複数のEQ丸数字がある旧Wordテンプレートでも露出させない", () => {
+    const zip = new PizZip(createDocxTemplate("{today}"));
+    zip.file(
+      "word/document.xml",
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    ${[1, 2, 3, 4, 5, 6]
+      .map(
+        (number) => `<w:p>
+      <w:r><w:t xml:space="preserve">　　　eq \\o\\ac(○,</w:t></w:r>
+      <w:r><w:rPr><w:position w:val="3"/></w:rPr><w:t>${number}</w:t></w:r>
+      <w:r><w:t>)資料${number}</w:t></w:r>
+    </w:p>`,
+      )
+      .join("\n")}
+    <w:sectPr/>
+  </w:body>
+</w:document>`,
+    );
+
+    const rendered = fillDocx(
+      zip.generate({ type: "arraybuffer", compression: "DEFLATE" }) as ArrayBuffer,
+      buildTransferContext(),
+      false,
+    );
+    const xml = extractDocumentXml(rendered);
+    const text = extractDocumentText(rendered);
+
+    expect(text).toContain("① 資料1");
+    expect(text).toContain("② 資料2");
+    expect(text).toContain("③ 資料3");
+    expect(text).toContain("④ 資料4");
+    expect(text).toContain("⑤ 資料5");
+    expect(text).toContain("⑥ 資料6");
+    expect(xml).not.toContain("eq \\o\\ac");
+  });
 });

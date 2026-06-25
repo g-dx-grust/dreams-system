@@ -6,7 +6,7 @@ import { cn } from "@/lib/cn";
  * dreaMs ボタン規定: Primary / Secondary / Danger / Text の 4 種のみ。
  * see: DESIGN.md §8.1
  */
-const buttonVariants = cva(
+export const buttonVariants = cva(
   "inline-flex items-center justify-center gap-xs whitespace-nowrap rounded-s text-m font-semibold leading-tight transition-colors disabled:cursor-not-allowed disabled:opacity-60",
   {
     variants: {

@@ -2,9 +2,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/permissions";
+import { logAudit } from "@/lib/audit";
+import { requestIpFromHeaders } from "@/lib/request-ip";
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await getCurrentUser();
@@ -26,6 +28,21 @@ export async function GET(
     .download(history.file_path.replace(/^documents\//, ""));
 
   if (dlErr || !blob) return new NextResponse("Not Found", { status: 404 });
+
+  await logAudit({
+    userId: user.id,
+    action: "document.download",
+    entityType: "document",
+    entityId: history.id,
+    detail: {
+      caseId: history.case_id,
+      templateId: history.template_id,
+      fileName: history.file_name,
+      fileType: history.file_type,
+      downloadMode: "single",
+    },
+    ipAddress: requestIpFromHeaders(req.headers),
+  });
 
   const contentType =
     history.file_type === "docx"

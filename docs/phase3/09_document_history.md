@@ -81,6 +81,7 @@ GET /api/documents/{id}/download
 | 帳票生成 | `document.generate` | 案件ID・テンプレートID・ファイル名 |
 | テンプレートアップロード | `template.upload` | テンプレート名・カテゴリ |
 | テンプレート無効化 | `template.deactivate` | テンプレートID |
+| 帳票ダウンロード | `document.download` | 案件ID・帳票履歴ID・ファイル名・一括ZIPかどうか |
 | ログイン | `auth.login` | ユーザー名・IPアドレス |
 | ログアウト | `auth.logout` | |
 

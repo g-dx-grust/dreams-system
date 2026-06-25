@@ -208,6 +208,18 @@ function wrapWithHighlight(ctx: TransferContext, _paths: Set<string>): TransferC
 }
 ```
 
+#### 旧Word変換テンプレートの正規化
+
+`.doc`から`textutil`等で変換したテンプレートには、Wordが修復対象として扱う非標準OOXMLが
+残ることがある。生成後に「ファイルが壊れている」警告やレイアウト崩れを出さないため、
+`fillDocx`はレンダー前後で以下を正規化する。
+
+- `w:sz-cs`を`w:szCs`へ変換する
+- `w:first-line`を`w:firstLine`へ変換する
+- `eq \o\ac(○,1)`〜`eq \o\ac(○,20)`を丸数字へ変換する
+- `eq \o\ac(○,印)`を丸印へ変換する
+- `.docx`のZIPを`[Content_Types].xml`先頭、ディレクトリエントリなしで再生成する
+
 #### ハイライト方式の決定（重要）
 
 docxtemplater は XML の「テキスト置換」が本質のため、docxtpl の `RichText` のように
@@ -507,5 +519,5 @@ export function buildFileName(
 - [x] `fillXlsx`（exceljs ベース、単一セル置換）
 - [x] 転記前チェック（preCheck）
 - [x] ファイル命名規則
-- [ ] Excel 行増殖（`loop_*_start` / `loop_*_end` 名前定義）— Phase 3 後半で追加
+- [x] Excel 行増殖（`loop_*_start` / `loop_*_end` 名前定義）
 - [ ] Word のハイライト 3-B 方式（html-module）— 要件の強さ次第で追加

@@ -1,14 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import {
-  useDeferredValue,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   AlertCircle,
   BookText,
@@ -51,6 +44,14 @@ type MappingRow = {
 };
 
 type RowStatus = "complete" | "needsInput" | "warning";
+type MappingRowSummary = {
+  matchedField?: FieldEntry;
+  isUnknownField: boolean;
+  isDuplicate: boolean;
+  status: RowStatus;
+};
+type XlsxPreview = Extract<TemplatePreview, { fileType: "xlsx" }>;
+type XlsxPreviewCell = XlsxPreview["sheets"][number]["rows"][number]["cells"][number];
 
 const HIGH_CONFIDENCE_THRESHOLD = 0.8;
 
@@ -113,6 +114,47 @@ function findMappingByTarget(rows: MappingRow[], target: string) {
 
 function mappingTargetForCell(sheetName: string, sheetCount: number, address: string) {
   return sheetCount > 1 ? `${sheetName}!${address}` : address;
+}
+
+function isXlsxPreview(preview: TemplatePreview | null): preview is XlsxPreview {
+  return preview?.fileType === "xlsx";
+}
+
+function splitXlsxTarget(
+  target: string,
+  preview: XlsxPreview,
+): { sheetName: string; address: string } | null {
+  const trimmed = target.trim();
+  if (!trimmed) return null;
+
+  const separatorIndex = preview.sheets.length > 1 ? trimmed.indexOf("!") : -1;
+  if (separatorIndex >= 0) {
+    const sheetName = trimmed.slice(0, separatorIndex);
+    const address = trimmed.slice(separatorIndex + 1);
+    return sheetName && address ? { sheetName, address } : null;
+  }
+
+  const firstSheet = preview.sheets[0];
+  return firstSheet ? { sheetName: firstSheet.name, address: trimmed } : null;
+}
+
+function findXlsxPreviewCell(
+  preview: TemplatePreview | null,
+  target: string,
+): XlsxPreviewCell | null {
+  if (!isXlsxPreview(preview)) return null;
+  const parsed = splitXlsxTarget(target, preview);
+  if (!parsed) return null;
+
+  const sheet = preview.sheets.find((item) => item.name === parsed.sheetName);
+  if (!sheet) return null;
+
+  for (const row of sheet.rows) {
+    const cell = row.cells.find((item) => item.address === parsed.address);
+    if (cell) return cell;
+  }
+
+  return null;
 }
 
 function isAutoLabel(label: string, oldFieldPath: string, placeholder: string) {
@@ -664,7 +706,7 @@ function MappingRowList({
   onRemove,
 }: {
   rows: MappingRow[];
-  rowSummaries: { matchedField?: FieldEntry; status: RowStatus }[];
+  rowSummaries: MappingRowSummary[];
   activeRowIndex: number | null;
   guide: ReturnType<typeof fileTypeGuide>;
   onSelect: (index: number) => void;
@@ -1166,6 +1208,294 @@ export function MappingEditor({
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (fileType === "xlsx") {
+    const selectedCell = activeRow
+      ? findXlsxPreviewCell(initialPreview, activeRow.placeholder)
+      : null;
+    const activeBadge = rowStatusBadge(activeSummary?.status ?? "needsInput");
+
+    return (
+      <div className="flex h-full min-h-0 flex-col bg-background">
+        <header className="shrink-0 border-b border-border bg-white">
+          <div className="flex flex-wrap items-center justify-between gap-s px-m py-s">
+            <div className="flex min-w-0 items-center gap-s">
+              <Link
+                href={backHref}
+                className="inline-flex h-8 shrink-0 items-center gap-xs rounded-s border border-border bg-white px-s text-s text-text-black hover:bg-grey-7"
+              >
+                <ChevronLeft size={15} aria-hidden="true" />
+                詳細
+              </Link>
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-s bg-main-soft text-main">
+                <FileSpreadsheet size={16} aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <h1 className="truncate text-l font-semibold leading-tight text-text-black">
+                  {templateName}
+                </h1>
+                <p className="truncate text-xs text-text-grey">Excel マッピング / {templateMeta}</p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-xs">
+              <Badge tone={unresolvedCount > 0 ? "danger" : "success"}>
+                未設定 <span className="tabular-nums">{unresolvedCount}</span>
+              </Badge>
+              <Badge tone={warningCount > 0 ? "warning" : "neutral"}>
+                確認 <span className="tabular-nums">{warningCount}</span>
+              </Badge>
+              <Badge tone="neutral">
+                必須 <span className="tabular-nums">{requiredCount}</span>
+              </Badge>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-m border-t border-border px-m py-xs">
+            <div className="h-2 min-w-32 flex-1 overflow-hidden rounded-full bg-grey-7">
+              <div
+                className="h-full rounded-full bg-main transition-[width]"
+                style={{ width: `${progress}%` }}
+                role="progressbar"
+                aria-valuenow={progress}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label="マッピング完了率"
+              />
+            </div>
+            <p className="shrink-0 text-xs text-text-grey tabular-nums">
+              {completedCount} / {rows.length} 件完了（{progress}%）
+            </p>
+          </div>
+        </header>
+
+        <div className="grid min-h-0 flex-1 grid-cols-1 overflow-auto bg-background lg:grid-cols-[minmax(0,1fr)_minmax(360px,420px)] lg:overflow-hidden">
+          <section className="min-h-96 min-w-0 overflow-hidden border-b border-border lg:min-h-0 lg:border-b-0 lg:border-r">
+            <PreviewPanel
+              preview={initialPreview}
+              previewError={initialPreviewError}
+              rows={rows}
+              activeTarget={activeRow?.placeholder ?? ""}
+              onSelectTarget={applyPreviewTarget}
+            />
+          </section>
+
+          <aside className="flex min-w-0 flex-col overflow-visible border-b border-border bg-white lg:min-h-0 lg:overflow-hidden lg:border-b-0">
+            <PanelHeader
+              icon={<ClipboardCheck size={15} aria-hidden="true" />}
+              title="選択セル"
+              description={activeRow?.placeholder || "未選択"}
+              right={
+                <div className="flex items-center gap-xs">
+                  <Badge tone={activeBadge.tone}>{activeBadge.label}</Badge>
+                  <button
+                    type="button"
+                    onClick={() => setDictOpen(true)}
+                    className="inline-flex h-7 items-center gap-xs rounded-s border border-border bg-white px-s text-s text-text-black hover:bg-grey-7 lg:hidden"
+                  >
+                    <BookText size={14} aria-hidden="true" />
+                    辞書
+                  </button>
+                </div>
+              }
+            />
+
+            <div className="shrink-0 border-b border-border p-m">
+              {activeRow && activeRowIndex != null ? (
+                <div className="flex flex-col gap-s">
+                  <div className="grid grid-cols-2 gap-s rounded-s border border-border bg-grey-5 p-s">
+                    <div className="min-w-0">
+                      <p className="text-xs text-text-grey">セル</p>
+                      <p className="truncate text-s font-semibold text-text-black">
+                        {activeRow.placeholder || "未設定"}
+                      </p>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs text-text-grey">値</p>
+                      <p className="truncate text-s text-text-black">
+                        {selectedCell?.value || "空欄"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <label className="flex flex-col gap-xxs text-xs text-text-grey">
+                    セル座標
+                    <Input
+                      value={activeRow.placeholder}
+                      onChange={(e) => updateRow(activeRowIndex, "placeholder", e.target.value)}
+                      placeholder={guide.placeholderHint}
+                      className="text-s"
+                    />
+                  </label>
+
+                  <label className="flex flex-col gap-xxs text-xs text-text-grey">
+                    フィールド
+                    <Input
+                      value={activeRow.fieldPath}
+                      onChange={(e) => updateFieldPath(activeRowIndex, e.target.value)}
+                      onBlur={(e) => {
+                        const found = suggestFieldEntry(e.target.value);
+                        if (found) updateFieldPath(activeRowIndex, found.path);
+                      }}
+                      placeholder="フィールド辞書から選択"
+                      className="text-s"
+                    />
+                  </label>
+
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-s">
+                    <label className="flex min-w-0 flex-col gap-xxs text-xs text-text-grey">
+                      表示名
+                      <Input
+                        value={activeRow.label}
+                        onChange={(e) => updateRow(activeRowIndex, "label", e.target.value)}
+                        placeholder={fieldLabel(activeRow.fieldPath || activeRow.placeholder)}
+                        className="text-s"
+                      />
+                    </label>
+
+                    <label className="mb-xs inline-flex items-center gap-xs text-xs text-text-grey">
+                      <Checkbox
+                        checked={activeRow.isRequired}
+                        onChange={(e) => updateRow(activeRowIndex, "isRequired", e.target.checked)}
+                      />
+                      必須
+                    </label>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-xs">
+                    {activeSummary?.matchedField && (
+                      <Badge tone="info">{activeSummary.matchedField.label}</Badge>
+                    )}
+                    {activeSummary?.isDuplicate && (
+                      <span className="flex items-center gap-xxs text-xs text-danger">
+                        <AlertCircle size={12} aria-hidden="true" />
+                        同じセルがあります
+                      </span>
+                    )}
+                    {activeSummary?.isUnknownField && (
+                      <span className="flex items-center gap-xxs text-xs text-warning">
+                        <AlertCircle size={12} aria-hidden="true" />
+                        辞書未登録のパスです
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-s border border-dashed border-border bg-grey-5 p-m text-s text-text-grey">
+                  選択セルはありません。
+                </div>
+              )}
+            </div>
+
+            <AiSuggestionPanel
+              suggestion={suggestion}
+              suggestionError={suggestionError}
+              suggesting={suggesting}
+              highConfidenceCount={highConfidenceCandidates.length}
+              isCandidateAdopted={isCandidateAdopted}
+              onCreateSuggestions={handleSuggestMappings}
+              onApplyCandidate={applyCandidate}
+              onApplyHighConfidence={applyHighConfidenceCandidates}
+            />
+
+            <div className="hidden min-h-0 flex-1 lg:block">
+              <FieldDictionary
+                fieldQuery={fieldQuery}
+                setFieldQuery={setFieldQuery}
+                filteredGroups={filteredGroups}
+                fieldCount={fieldCount}
+                activeRowNumber={activeRowNumber}
+                onSelectField={applyFieldToRow}
+              />
+            </div>
+          </aside>
+
+          <section className="flex h-72 min-w-0 flex-col border-t border-border bg-white lg:col-span-2">
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-s border-b border-border px-m py-xs">
+              <p className="text-xs text-text-grey">
+                全<span className="tabular-nums">{rows.length}</span>件
+              </p>
+              <div className="flex flex-wrap items-center gap-xs">
+                <Button variant="secondary" size="sm" onClick={autoFillRows}>
+                  <Wand2 size={14} aria-hidden="true" />
+                  自動補完
+                </Button>
+                <Button variant="secondary" size="sm" onClick={removeEmptyRows}>
+                  空行整理
+                </Button>
+                <Button variant="secondary" size="sm" onClick={addRow}>
+                  <Plus size={14} aria-hidden="true" />
+                  行追加
+                </Button>
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-auto">
+              <MappingRowList
+                rows={rows}
+                rowSummaries={rowSummaries}
+                activeRowIndex={activeRowIndex}
+                guide={guide}
+                onSelect={setActiveRowIndex}
+                onRemove={removeRow}
+              />
+            </div>
+          </section>
+        </div>
+
+        <FieldDictionaryDrawer open={dictOpen} onClose={() => setDictOpen(false)}>
+          <FieldDictionary
+            fieldQuery={fieldQuery}
+            setFieldQuery={setFieldQuery}
+            filteredGroups={filteredGroups}
+            fieldCount={fieldCount}
+            activeRowNumber={activeRowNumber}
+            onSelectField={(field) => {
+              applyFieldToRow(field);
+              setDictOpen(false);
+            }}
+            onClose={() => setDictOpen(false)}
+          />
+        </FieldDictionaryDrawer>
+
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-s border-t border-border bg-white px-m py-s pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+          <div className="flex min-w-0 flex-wrap items-center gap-s text-xs">
+            {error ? (
+              <span className="flex min-w-0 items-center gap-xxs text-danger">
+                <AlertCircle size={13} aria-hidden="true" />
+                <span className="truncate">{error}</span>
+              </span>
+            ) : saved && !dirty ? (
+              <span className="flex items-center gap-xxs text-success">
+                <CheckCircle2 size={13} aria-hidden="true" />
+                保存済み
+              </span>
+            ) : dirty ? (
+              <span className="text-text-grey">未保存の変更があります</span>
+            ) : (
+              <span className="text-text-grey">変更はありません</span>
+            )}
+          </div>
+          <div className="flex shrink-0 items-center gap-s">
+            <Link
+              href={backHref}
+              className="inline-flex h-8 shrink-0 items-center rounded-s border border-border bg-white px-m text-s text-text-black hover:bg-grey-7"
+            >
+              キャンセル
+            </Link>
+            <Button
+              variant="primary"
+              onClick={handleSave}
+              loading={submitting}
+              loadingLabel="保存中..."
+            >
+              保存する
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (

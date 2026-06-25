@@ -254,13 +254,6 @@ textarea {
   --calendar-event-color: var(--color-chart-10);
 }
 
-/* ==== Spinner (button / inline loading) ==== */
-@keyframes ui-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 .ui-spinner {
   display: inline-block;
   width: 14px;
@@ -268,14 +261,7 @@ textarea {
   border-radius: 50%;
   border: 1.5px solid currentColor;
   border-right-color: transparent;
-  animation: ui-spin 0.6s linear infinite;
   vertical-align: -2px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ui-spinner {
-    animation-duration: 1.6s;
-  }
 }
 
 /* ==== Toast (下から 8px フェードイン) ==== see: DESIGN.md §9.5 */
@@ -300,30 +286,14 @@ textarea {
   }
 }
 
-/* ==== Navigation progress (遷移時の上部2pxバー) ==== see: DESIGN.md §9.3 */
-@keyframes ui-navprogress {
-  0% {
-    width: 0;
-    opacity: 1;
-  }
-  90% {
-    width: 90%;
-    opacity: 1;
-  }
-  100% {
-    width: 96%;
-    opacity: 1;
-  }
-}
-
 .ui-navprogress {
   position: fixed;
   inset-block-start: 0;
   inset-inline-start: 0;
   z-index: 400;
-  height: 2px;
+  width: 100%;
+  height: var(--spacing-xxs);
   background-color: var(--color-main);
-  animation: ui-navprogress 2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 /* ==== Skip link (キーボードで本文へ) ==== see: DESIGN.md §10 */

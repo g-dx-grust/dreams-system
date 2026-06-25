@@ -13,10 +13,16 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardBody } from "@/components/ui/card";
 import { SaveBar } from "@/components/ui/save-bar";
 import { useToast } from "@/components/ui/toast";
+import { useZipSearch } from "@/hooks/use-zip-search";
 import { PREFECTURES } from "@/lib/prefectures";
 import { PersonUpsertSchema, type PersonUpsertInput } from "@/lib/validators/person";
 import { CASE_PERSON_ROLES, CasePersonRoleLabels } from "@/lib/validators/case";
-import { createPerson, updatePerson, findDuplicates, type DuplicateCandidate } from "@/server/persons";
+import {
+  createPerson,
+  updatePerson,
+  findDuplicates,
+  type DuplicateCandidate,
+} from "@/server/persons";
 
 type Props = {
   mode: "create" | "edit";
@@ -27,6 +33,12 @@ type Props = {
 export function PersonForm({ mode, personId, defaultValues }: Props) {
   const router = useRouter();
   const toast = useToast();
+  const {
+    search: searchZipAddress,
+    reset: resetZipSearch,
+    isLoading: isZipSearching,
+    error: zipSearchError,
+  } = useZipSearch();
   const [pending, startTransition] = useTransition();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [duplicates, setDuplicates] = useState<DuplicateCandidate[]>([]);
@@ -49,6 +61,7 @@ export function PersonForm({ mode, personId, defaultValues }: Props) {
 
   const personType = watch("person_type");
   const nameValue = watch("name");
+  const zipValue = watch("zip");
 
   useEffect(() => {
     if (mode !== "create" || !nameValue || nameValue.length < 2) {
@@ -62,31 +75,23 @@ export function PersonForm({ mode, personId, defaultValues }: Props) {
     return () => clearTimeout(timer);
   }, [nameValue, mode]);
 
+  useEffect(() => {
+    resetZipSearch();
+  }, [zipValue, resetZipSearch]);
+
   const searchZip = async () => {
-    const zip = watch("zip")?.replace(/-/g, "");
-    if (!zip || zip.length !== 7) return;
-    try {
-      const res = await fetch(`https://zipcloud.ibsnet.co.jp/api/search?zipcode=${zip}`);
-      const data = (await res.json()) as {
-        results?: { address1: string; address2: string; address3: string }[];
-      };
-      const first = data.results?.[0];
-      if (first) {
-        setValue("address_pref", first.address1, { shouldDirty: true });
-        setValue("address_city", first.address2, { shouldDirty: true });
-        setValue("address_town", first.address3, { shouldDirty: true });
-      }
-    } catch {
-      // 住所補完は失敗してもフォーム送信を妨げない
-    }
+    const result = await searchZipAddress(zipValue ?? "");
+    if (!result) return;
+    setValue("address_pref", result.pref, { shouldDirty: true });
+    setValue("address_city", result.city, { shouldDirty: true });
+    setValue("address_town", result.town, { shouldDirty: true });
   };
 
   const onSubmit = (values: PersonUpsertInput) => {
     setSubmitError(null);
     startTransition(async () => {
-      const res = mode === "create"
-        ? await createPerson(values)
-        : await updatePerson(personId!, values);
+      const res =
+        mode === "create" ? await createPerson(values) : await updatePerson(personId!, values);
       if (!res.ok) {
         setSubmitError(res.error);
         return;
@@ -184,10 +189,21 @@ export function PersonForm({ mode, personId, defaultValues }: Props) {
           <CardTitle>住所</CardTitle>
         </CardHeader>
         <CardBody className="flex flex-col gap-m">
-          <Field label="郵便番号" error={errors.zip?.message} hint="7桁の数字（ハイフンなし）">
+          <Field
+            label="郵便番号"
+            error={errors.zip?.message ?? zipSearchError ?? undefined}
+            hint="7桁の数字（ハイフンなし）"
+          >
             <div className="flex items-center gap-s">
               <Input {...register("zip")} className="max-w-[180px]" placeholder="4418077" />
-              <Button type="button" variant="secondary" onClick={searchZip}>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={searchZip}
+                loading={isZipSearching}
+                loadingLabel="検索中…"
+                disabled={isZipSearching}
+              >
                 住所を補完する
               </Button>
             </div>
@@ -282,12 +298,7 @@ export function PersonForm({ mode, personId, defaultValues }: Props) {
       )}
 
       <SaveBar info={isDirty ? <>未保存の変更があります</> : null}>
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={() => router.back()}
-          disabled={pending}
-        >
+        <Button type="button" variant="secondary" onClick={() => router.back()} disabled={pending}>
           キャンセル
         </Button>
         <Button type="submit" loading={pending} loadingLabel="保存中…">

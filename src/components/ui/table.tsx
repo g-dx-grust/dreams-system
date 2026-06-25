@@ -5,7 +5,7 @@ import { cn } from "@/lib/cn";
 export function Table({ className, ...props }: React.HTMLAttributes<HTMLTableElement>) {
   return (
     <div className="w-full overflow-x-auto">
-      <table className={cn("w-full border-collapse text-m", className)} {...props} />
+      <table className={cn("w-full border-collapse text-s", className)} {...props} />
     </div>
   );
 }
@@ -18,7 +18,7 @@ export function THead({
   return (
     <thead
       className={cn(
-        "bg-head border-b border-border",
+        "border-b border-border bg-head",
         sticky && "sticky top-0 z-10",
         className,
       )}
@@ -40,8 +40,8 @@ export function TR({
     <tr
       data-selected={selected || undefined}
       className={cn(
-        "border-b border-border",
-        selected ? "bg-main-soft" : "hover:bg-grey-7",
+        "border-b border-border transition-colors",
+        selected ? "bg-main-soft" : "hover:bg-grey-5",
         className,
       )}
       {...props}
@@ -57,7 +57,7 @@ export function TH({
   return (
     <th
       className={cn(
-        "px-m py-s text-s font-semibold text-text-grey whitespace-nowrap",
+        "whitespace-nowrap px-m py-s text-left text-xs font-semibold leading-tight text-text-grey",
         numeric ? "text-right" : "text-left",
         className,
       )}
@@ -74,7 +74,7 @@ export function TD({
   return (
     <td
       className={cn(
-        "px-m py-s align-middle text-text-black",
+        "px-m py-s align-middle leading-relaxed text-text-black",
         numeric && "text-right tabular-nums whitespace-nowrap",
         className,
       )}
@@ -109,7 +109,7 @@ export function SortableTH({
     <th
       aria-sort={active ? (direction === "asc" ? "ascending" : "descending") : "none"}
       className={cn(
-        "px-m py-s text-s font-semibold text-text-grey whitespace-nowrap",
+        "whitespace-nowrap px-m py-s text-xs font-semibold leading-tight text-text-grey",
         numeric ? "text-right" : "text-left",
         className,
       )}

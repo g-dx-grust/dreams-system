@@ -7,15 +7,15 @@ import { cn } from "@/lib/cn";
  * 色は G-DX トークンの範囲のみ使用する。
  */
 const badgeVariants = cva(
-  "inline-flex h-5 items-center whitespace-nowrap rounded-s px-xs text-xs font-semibold leading-none",
+  "inline-flex h-5 items-center whitespace-nowrap rounded-s border px-xs text-xs font-semibold leading-none",
   {
     variants: {
       tone: {
-        neutral: "bg-grey-7 text-text-grey",
-        info: "bg-main-soft text-main",
-        success: "bg-success-soft text-success",
-        warning: "bg-warning-soft text-warning",
-        danger: "bg-danger-soft text-danger",
+        neutral: "border-border bg-grey-7 text-text-grey",
+        info: "border-main/20 bg-main-soft text-main",
+        success: "border-success/20 bg-success-soft text-success",
+        warning: "border-warning/20 bg-warning-soft text-warning",
+        danger: "border-danger/20 bg-danger-soft text-danger",
       },
     },
     defaultVariants: { tone: "neutral" },

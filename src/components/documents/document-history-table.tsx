@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Download } from "lucide-react";
+import { buttonVariants } from "@/components/ui/button";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { SortHeader } from "@/components/common/sort-header";
 import { Badge } from "@/components/ui/badge";
@@ -60,7 +61,7 @@ export function DocumentHistoryTable({ items, showCaseNumber, sortable }: Props)
           ) : (
             <TH className="w-[170px]">生成日時</TH>
           )}
-          <TH className="w-[64px]"></TH>
+          <TH className="w-[124px]">操作</TH>
         </TR>
       </THead>
       <TBody>
@@ -88,10 +89,11 @@ export function DocumentHistoryTable({ items, showCaseNumber, sortable }: Props)
               <a
                 href={`/api/documents/${row.id}/download`}
                 download={row.file_name}
-                className="ui-link inline-flex items-center gap-xs text-s font-semibold"
+                aria-label={`${row.file_name} をダウンロード`}
+                className={buttonVariants({ variant: "secondary", size: "sm" })}
               >
-                <Download size={16} />
-                DL
+                <Download className="h-4 w-4" aria-hidden="true" />
+                ダウンロード
               </a>
             </TD>
           </TR>

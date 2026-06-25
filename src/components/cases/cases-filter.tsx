@@ -85,9 +85,25 @@ export function CasesFilter({ users }: { users: AssignableUser[] }) {
   };
 
   return (
-    <div className="flex flex-col gap-s p-m">
-      <div className="flex flex-wrap items-end gap-s">
-        <label className="flex min-w-[220px] flex-1 flex-col gap-xs">
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-s border-b border-border bg-head px-m py-s">
+        <div>
+          <p className="text-s font-semibold text-text-black">検索条件</p>
+          <p className="text-xs text-text-grey">案件番号・担当者・締切で絞り込みます。</p>
+        </div>
+        {chips.length > 0 && (
+          <button
+            type="button"
+            onClick={clearAll}
+            className="text-xs font-medium text-text-link hover:underline"
+          >
+            条件をすべて解除
+          </button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 gap-s px-m py-m md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7">
+        <label className="flex flex-col gap-xs xl:col-span-2">
           <span className="text-s font-medium text-text-grey">キーワード</span>
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="案件番号・案件名" />
         </label>
@@ -96,7 +112,7 @@ export function CasesFilter({ users }: { users: AssignableUser[] }) {
           <Select
             value={sp.get("type") ?? ""}
             onChange={(e) => setParam("type", e.target.value)}
-            className="w-[160px]"
+            className="w-full"
           >
             <option value="">すべて</option>
             {CASE_TYPES.map((t) => (
@@ -111,7 +127,7 @@ export function CasesFilter({ users }: { users: AssignableUser[] }) {
           <Select
             value={sp.get("status") ?? ""}
             onChange={(e) => setParam("status", e.target.value)}
-            className="w-[130px]"
+            className="w-full"
           >
             <option value="">すべて</option>
             {CASE_STATUSES.map((s) => (
@@ -126,7 +142,7 @@ export function CasesFilter({ users }: { users: AssignableUser[] }) {
           <Select
             value={sp.get("user") ?? ""}
             onChange={(e) => setParam("user", e.target.value)}
-            className="w-[150px]"
+            className="w-full"
           >
             <option value="">すべて</option>
             {users.map((u) => (
@@ -142,7 +158,7 @@ export function CasesFilter({ users }: { users: AssignableUser[] }) {
             type="date"
             value={sp.get("deadline_from") ?? ""}
             onChange={(e) => setParam("deadline_from", e.target.value)}
-            className="w-[150px]"
+            className="w-full"
           />
         </label>
         <label className="flex flex-col gap-xs">
@@ -151,10 +167,10 @@ export function CasesFilter({ users }: { users: AssignableUser[] }) {
             type="date"
             value={sp.get("deadline_to") ?? ""}
             onChange={(e) => setParam("deadline_to", e.target.value)}
-            className="w-[150px]"
+            className="w-full"
           />
         </label>
-        <label className="flex h-8 items-center gap-xs text-s text-text-black">
+        <label className="flex h-8 items-center gap-xs self-end text-s text-text-black">
           <Checkbox
             checked={sp.get("overdue") === "1"}
             onChange={(e) => setParam("overdue", e.target.checked ? "1" : "")}
@@ -164,11 +180,11 @@ export function CasesFilter({ users }: { users: AssignableUser[] }) {
       </div>
 
       {chips.length > 0 && (
-        <div className="flex flex-wrap items-center gap-xs">
+        <div className="flex flex-wrap items-center gap-xs border-t border-border px-m py-s">
           {chips.map((chip) => (
             <span
               key={chip.key}
-              className="inline-flex items-center gap-xxs rounded-s bg-grey-7 py-xxs pl-s pr-xxs text-xs text-text-grey"
+              className="inline-flex items-center gap-xxs rounded-s border border-border bg-grey-7 py-xxs pl-s pr-xxs text-xs text-text-grey"
             >
               {chip.label}
               <button
@@ -181,13 +197,6 @@ export function CasesFilter({ users }: { users: AssignableUser[] }) {
               </button>
             </span>
           ))}
-          <button
-            type="button"
-            onClick={clearAll}
-            className="ml-xs text-xs text-text-link hover:underline"
-          >
-            すべて解除
-          </button>
         </div>
       )}
     </div>

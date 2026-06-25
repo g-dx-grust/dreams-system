@@ -180,7 +180,28 @@ export function CasesTable({
         </div>
       )}
 
-      <Card>
+      <div className="md:hidden">
+        <div className="space-y-s">
+          {items.map((c) => {
+            const overdue = isOverdue(c.deadline_date, c.status);
+            const assignedUser =
+              c.assigned_user_id != null ? userMap[c.assigned_user_id] : undefined;
+            const checked = selected.has(c.id);
+            return (
+              <CaseMobileCard
+                key={c.id}
+                item={c}
+                checked={checked}
+                overdue={overdue}
+                assignedUser={assignedUser}
+                onToggle={() => toggleOne(c.id)}
+              />
+            );
+          })}
+        </div>
+      </div>
+
+      <Card className="hidden md:block">
         <Table>
           <THead>
             <TR>
@@ -283,5 +304,70 @@ export function CasesTable({
         onCancel={() => setGenerateOpen(false)}
       />
     </>
+  );
+}
+
+function CaseMobileCard({
+  item,
+  checked,
+  overdue,
+  assignedUser,
+  onToggle,
+}: {
+  item: CaseRow;
+  checked: boolean;
+  overdue: boolean;
+  assignedUser: UserInfo | undefined;
+  onToggle: () => void;
+}) {
+  return (
+    <article className="rounded-m border border-border bg-white shadow-s">
+      <div className="flex items-start gap-s border-b border-border bg-grey-5 px-m py-s">
+        <Checkbox
+          checked={checked}
+          onChange={onToggle}
+          aria-label={`${item.case_number} を選択`}
+          className="mt-xxs"
+        />
+        <div className="min-w-0 flex-1">
+          <Link href={`/cases/${item.id}`} className="ui-link text-s font-semibold tabular-nums">
+            {item.case_number}
+          </Link>
+          <Link
+            href={`/cases/${item.id}`}
+            className="mt-xxs block text-m font-semibold leading-relaxed text-text-black"
+          >
+            {item.case_name}
+          </Link>
+        </div>
+      </div>
+
+      <div className="space-y-s px-m py-s">
+        <div className="flex flex-wrap gap-xs">
+          <Badge tone={caseTypeTone(item.case_type)}>{caseTypeLabel(item.case_type)}</Badge>
+          <Badge tone={caseStatusTone(item.status)}>{caseStatusLabel(item.status)}</Badge>
+          {overdue && <Badge tone="danger">期限超過</Badge>}
+        </div>
+
+        <dl className="grid grid-cols-[88px_1fr] gap-x-s gap-y-xs text-s">
+          <dt className="text-text-grey">担当者</dt>
+          <dd className="min-w-0 text-text-black">
+            {assignedUser?.full_name ?? assignedUser?.email ?? "—"}
+          </dd>
+          <dt className="text-text-grey">提出先</dt>
+          <dd className="min-w-0 text-text-black">{item.submission_target ?? "—"}</dd>
+          <dt className="text-text-grey">締切日</dt>
+          <dd className={cn("tabular-nums", overdue && "font-semibold text-danger")}>
+            {formatDate(item.deadline_date)}
+          </dd>
+        </dl>
+
+        <div className="flex justify-end border-t border-border pt-s">
+          <Link href={`/cases/${item.id}`} className="ui-link text-s font-semibold">
+            詳細を見る
+          </Link>
+        </div>
+      </div>
+    </article>
   );
 }

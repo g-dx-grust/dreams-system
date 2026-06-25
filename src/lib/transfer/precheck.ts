@@ -10,6 +10,17 @@ export type PreCheckResult = {
   previewData: Record<string, string>;
 };
 
+export function formatMissingRequiredMessage(fields: string[]): string {
+  const uniqueFields = Array.from(
+    new Set(fields.map((field) => field.trim()).filter(Boolean)),
+  );
+  const visibleFields = uniqueFields.slice(0, 5).join("、");
+  const rest =
+    uniqueFields.length > 5 ? `、ほか${uniqueFields.length - 5}件` : "";
+
+  return `必須フィールド（${visibleFields}${rest}）が未入力です。案件情報・関係者・土地情報を補完してから帳票を生成してください。`;
+}
+
 export function preCheck(ctx: TransferContext, mappings: Mapping[]): PreCheckResult {
   const result: PreCheckResult = {
     totalFields: mappings.length,

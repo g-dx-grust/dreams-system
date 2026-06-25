@@ -7,10 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { resolveBreadcrumb } from "./dashboard-route-utils";
 
-/*
- * 白ベースの常設ヘッダ（§8.6）。左にハンバーガー（モバイル）＋パンくず、
- * 右にログインユーザー＋ログアウト。サイドナブを畳んでも現在地とユーザーが見える。
- */
 export function AppHeader({
   user,
   signOutAction,
@@ -25,7 +21,7 @@ export function AppHeader({
 
   return (
     <header
-      className="flex shrink-0 items-center justify-between gap-m border-b border-border bg-white px-m"
+      className="flex shrink-0 items-center justify-between gap-m bg-grust-navy px-m text-white"
       style={{ height: "var(--height-app-header)" }}
     >
       <div className="flex min-w-0 items-center gap-s">
@@ -33,22 +29,29 @@ export function AppHeader({
           type="button"
           onClick={onHamburger}
           aria-label="メニューを開く"
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-s text-text-black transition-colors hover:bg-grey-7 lg:hidden"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-s text-white transition-colors hover:bg-white/10 lg:hidden"
         >
           <Menu className="h-[18px] w-[18px]" aria-hidden="true" />
         </button>
-        <Breadcrumb items={crumbs} />
+        <div className="[&_a]:text-white [&_a:hover]:text-white [&_span]:text-white/70">
+          <Breadcrumb items={crumbs} />
+        </div>
       </div>
 
       <div className="flex shrink-0 items-center gap-m">
         <div className="hidden text-right leading-tight sm:block">
-          <p className="text-xs text-text-quaternary">ログイン中</p>
-          <p className="truncate text-s font-semibold text-text-black">
+          <p className="text-xs text-white/60">ログインユーザー</p>
+          <p className="truncate text-s font-semibold text-white">
             {user.fullName || user.email}
           </p>
         </div>
         <form action={signOutAction}>
-          <Button type="submit" variant="secondary" size="sm">
+          <Button
+            type="submit"
+            variant="secondary"
+            size="sm"
+            className="border-white/20 bg-white/10 text-white hover:bg-white/20"
+          >
             ログアウト
           </Button>
         </form>

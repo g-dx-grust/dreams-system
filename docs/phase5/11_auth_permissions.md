@@ -311,8 +311,8 @@ export async function inviteUser(input: {
 
 | アクション                      | 発生場所                       | 詳細                          |
 | ------------------------------- | ------------------------------ | ----------------------------- |
-| `auth.login_success`            | Supabase Auth webhook（任意）  | ユーザー ID、IP               |
-| `auth.login_failure`            | 同上                           | メール、IP、失敗理由          |
+| `auth.login_success`            | メールログイン Server Action / Lark OAuth callback | ユーザー ID、IP               |
+| `auth.login_failure`            | メールログイン Server Action / Lark OAuth callback | メール、IP、失敗理由          |
 | `user.invite`                   | `inviteUser` Server Action     | email, role                   |
 | `user.role_change`              | `updateUserRole` Server Action | before/after                  |
 | `user.deactivate`               | `deactivateUser` Server Action | userId                        |
@@ -321,7 +321,7 @@ export async function inviteUser(input: {
 | `document.generate`             | `generateDocument`             | case_id, template_id, version |
 | `case.delete` / `person.delete` | 各削除 Server Action           | before                        |
 
-Supabase Auth のログイン成功・失敗は Supabase Logs でも閲覧可能。アプリの監査ログと重複するため、Webhook 経由で `audit_logs` に記録するかは Phase 5 後半で判断する。
+ログイン成功・失敗はアプリ側の `audit_logs` に記録する。失敗時は `user_id = null` とし、パスワードや認証コードは保存しない。Supabase Auth Logs は補助的な確認先として扱う。
 
 ---
 

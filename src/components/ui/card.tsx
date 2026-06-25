@@ -4,18 +4,31 @@ import { cn } from "@/lib/cn";
 export function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("overflow-hidden rounded-m border border-border bg-white", className)}
+      className={cn(
+        "overflow-hidden rounded-m border border-border bg-white shadow-s",
+        className,
+      )}
       {...props}
     />
   );
 }
 
 export function CardHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("border-b border-border px-m py-m", className)} {...props} />;
+  return (
+    <div
+      className={cn("border-b border-border bg-grey-5 px-m py-s", className)}
+      {...props}
+    />
+  );
 }
 
 export function CardTitle({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
-  return <h2 className={cn("text-l font-semibold text-text-black", className)} {...props} />;
+  return (
+    <h2
+      className={cn("text-m font-semibold leading-tight text-text-black", className)}
+      {...props}
+    />
+  );
 }
 
 export function CardBody({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {

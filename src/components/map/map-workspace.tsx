@@ -10,8 +10,7 @@ const MapView = dynamic(() => import("./map-view").then((m) => m.MapView), {
   ssr: false,
   loading: () => (
     <div className="flex h-[70vh] items-center justify-center rounded-m border border-border text-text-grey">
-      <span className="ui-spinner" aria-hidden="true" />
-      <span className="ml-s text-s">地図を読み込んでいます…</span>
+      <span className="text-s">地図を読み込んでいます…</span>
     </div>
   ),
 });

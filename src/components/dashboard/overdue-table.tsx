@@ -25,7 +25,7 @@ export function OverdueTable({ rows }: { rows: OverdueRow[] }) {
           <CardTitle>期限超過・期限間近の案件</CardTitle>
           <span className="text-s text-text-grey tabular-nums">全 {rows.length} 件</span>
         </div>
-        <Link href="/cases?filter=overdue" className="ui-link text-s">
+        <Link href="/cases?overdue=1" className="ui-link text-s">
           すべて見る
         </Link>
       </CardHeader>

@@ -60,8 +60,8 @@ export function PersonPicker({
             placeholder="氏名・フリガナ・住所・役割で検索"
             className="flex-1"
           />
-          <Button type="submit" variant="secondary" disabled={pending}>
-            {pending ? "検索中…" : "検索"}
+          <Button type="submit" variant="secondary" loading={pending} loadingLabel="検索中…">
+            検索
           </Button>
         </form>
 

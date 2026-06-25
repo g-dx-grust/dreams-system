@@ -10,6 +10,7 @@ import { type ActionResult, fail, ok } from "@/lib/result";
 import { buildTransferContext } from "@/lib/transfer/context-builder";
 import { fillDocx } from "@/lib/transfer/docx";
 import { fillXlsx } from "@/lib/transfer/xlsx";
+import { formatMissingRequiredMessage, preCheck } from "@/lib/transfer/precheck";
 import { isDebugTemplateDescription } from "@/lib/templates/check-template";
 import {
   buildFileName,
@@ -167,6 +168,11 @@ export async function generateDocument(
     );
   }
 
+  const checkResult = preCheck(ctx, mappings);
+  if (checkResult.missingRequired.length > 0) {
+    return fail(formatMissingRequiredMessage(checkResult.missingRequired));
+  }
+
   let outputBuf: Buffer;
   if (fileType === "docx") {
     outputBuf = fillDocx(templateBuf, ctx, parsed.data.highlight, mappings);
@@ -176,11 +182,7 @@ export async function generateDocument(
 
   const caseRow = caseRes.data as CaseRow;
 
-  const previewData: Record<string, string> = {};
-  const { resolvePath } = await import("@/lib/transfer/engine");
-  for (const m of mappings) {
-    previewData[m.fieldPath] = resolvePath(ctx, m.fieldPath);
-  }
+  const previewData = checkResult.previewData;
 
   for (let attempt = 0; attempt < DOCUMENT_SAVE_RETRIES; attempt += 1) {
     const version = await nextDocumentVersion(

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Download, FileText, Files, Search } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Field } from "@/components/ui/field";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -17,6 +17,7 @@ import {
   type GeneratedDocumentResult,
 } from "@/server/documents";
 import { previewTemplateFill } from "@/server/templates";
+import { formatMissingRequiredMessage } from "@/lib/transfer/precheck";
 import type { TemplateGenerationOption } from "@/server/templates";
 
 type Props = {
@@ -131,21 +132,41 @@ export function DocumentGenerateForm({ caseId, templates, parcelCount }: Props) 
     setBulkGenerated(null);
     setChecking(true);
     try {
-      const result = await previewTemplateFill(Number(templateId), caseId);
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      setPreview(result.data);
+      await runPreviewCheck(Number(templateId));
     } finally {
       setChecking(false);
     }
+  }
+
+  async function runPreviewCheck(selectedTemplateId: number) {
+    const result = await previewTemplateFill(selectedTemplateId, caseId);
+    if (!result.ok) {
+      setPreview(null);
+      setError(result.error);
+      return null;
+    }
+    setPreview(result.data);
+    return result.data;
   }
 
   async function handleGenerate() {
     if (!templateId) return;
     setError(null);
     setBulkGenerated(null);
+    setChecking(true);
+    try {
+      const checkResult = await runPreviewCheck(Number(templateId));
+      if (!checkResult) return;
+      if (checkResult.missingRequired.length > 0) {
+        const message = formatMissingRequiredMessage(checkResult.missingRequired);
+        setError(message);
+        toast({ message, tone: "warning" });
+        return;
+      }
+    } finally {
+      setChecking(false);
+    }
+
     setGenerating(true);
     try {
       const result = await generateDocument({
@@ -209,7 +230,7 @@ export function DocumentGenerateForm({ caseId, templates, parcelCount }: Props) 
         <div className="flex w-full min-w-0 flex-col gap-m">
           <div className="grid gap-m xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.25fr)]">
             <div className="flex min-w-0 flex-col gap-m">
-              <Field label="単票生成" required>
+              <Field label="テンプレート" required>
                 <Select
                   value={templateId}
                   onChange={(e) => {
@@ -245,13 +266,16 @@ export function DocumentGenerateForm({ caseId, templates, parcelCount }: Props) 
                   type="button"
                   variant="secondary"
                   onClick={handleGenerate}
-                  loading={generating}
-                  loadingLabel="生成中…"
+                  loading={checking || generating}
+                  loadingLabel={checking ? "確認中..." : "生成中..."}
                   disabled={
-                    !templateId || bulkGenerating || (preview?.missingRequired?.length ?? 0) > 0
+                    !templateId ||
+                    bulkGenerating ||
+                    checking ||
+                    (preview?.missingRequired?.length ?? 0) > 0
                   }
                 >
-                  この帳票を生成する
+                  チェックして生成する
                 </Button>
               </div>
             </div>
@@ -386,9 +410,14 @@ export function DocumentGenerateForm({ caseId, templates, parcelCount }: Props) 
                 <a
                   href={parcelAttachmentUrl}
                   download
-                  className="inline-flex h-8 shrink-0 items-center gap-xs whitespace-nowrap rounded-m border border-border bg-white px-s text-s font-medium text-main transition-colors hover:bg-grey-6"
+                  aria-label="筆別紙をダウンロード"
+                  className={buttonVariants({
+                    variant: "secondary",
+                    size: "sm",
+                    className: "shrink-0",
+                  })}
                 >
-                  <Download size={14} />
+                  <Download className="h-4 w-4" aria-hidden="true" />
                   別紙だけダウンロード
                 </a>
               ) : (
@@ -415,7 +444,10 @@ export function DocumentGenerateForm({ caseId, templates, parcelCount }: Props) 
           )}
 
           {preview && (
-            <div className="rounded bg-background border border-border p-m text-s flex flex-col gap-xs">
+            <div
+              className="flex flex-col gap-xs rounded-s border border-border bg-background p-m text-s"
+              aria-live="polite"
+            >
               <p className="font-medium">転記前チェック結果</p>
               <p>
                 フィールド数：{preview.filledFields} / {preview.totalFields} 件が入力済み
@@ -439,7 +471,10 @@ export function DocumentGenerateForm({ caseId, templates, parcelCount }: Props) 
           )}
 
           {generated && (
-            <div className="flex flex-col gap-s rounded-s border border-border bg-column p-m text-s sm:flex-row sm:items-center sm:justify-between">
+            <div
+              className="flex flex-col gap-s rounded-s border border-border bg-column p-m text-s sm:flex-row sm:items-center sm:justify-between"
+              aria-live="polite"
+            >
               <div className="flex min-w-0 items-start gap-xs sm:items-center">
                 <FileText size={16} className="text-main" />
                 <span className="min-w-0 break-all font-medium">{generated.fileName}</span>
@@ -448,15 +483,24 @@ export function DocumentGenerateForm({ caseId, templates, parcelCount }: Props) 
               <a
                 href={generated.downloadUrl}
                 download={generated.fileName}
-                className="inline-flex h-8 shrink-0 items-center justify-center whitespace-nowrap rounded-m border border-border bg-white px-s text-s font-medium text-main transition-colors hover:bg-grey-6"
+                aria-label={`${generated.fileName} をダウンロード`}
+                className={buttonVariants({
+                  variant: "secondary",
+                  size: "sm",
+                  className: "shrink-0",
+                })}
               >
+                <Download className="h-4 w-4" aria-hidden="true" />
                 ダウンロード
               </a>
             </div>
           )}
 
           {bulkGenerated && (
-            <div className="flex flex-col gap-s rounded-s border border-border bg-column p-m text-s">
+            <div
+              className="flex flex-col gap-s rounded-s border border-border bg-column p-m text-s"
+              aria-live="polite"
+            >
               <div className="flex flex-wrap items-center justify-between gap-s">
                 <div className="flex min-w-0 items-center gap-xs">
                   <Files size={16} className="text-main" />
@@ -477,10 +521,15 @@ export function DocumentGenerateForm({ caseId, templates, parcelCount }: Props) 
                         : bulkGenerated.downloadUrl
                     }
                     download
-                    className="inline-flex h-8 shrink-0 items-center justify-center gap-xs whitespace-nowrap rounded-m border border-border bg-white px-s text-s font-medium text-main transition-colors hover:bg-grey-6"
+                    aria-label="一括生成した帳票をZIPでダウンロード"
+                    className={buttonVariants({
+                      variant: "secondary",
+                      size: "sm",
+                      className: "shrink-0",
+                    })}
                   >
-                    <Download size={14} />
-                    ZIPダウンロード
+                    <Download className="h-4 w-4" aria-hidden="true" />
+                    ZIPをダウンロード
                   </a>
                 )}
               </div>

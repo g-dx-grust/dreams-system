@@ -2,6 +2,8 @@ import JSZip from "jszip";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/permissions";
+import { logAudit } from "@/lib/audit";
+import { requestIpFromHeaders } from "@/lib/request-ip";
 import {
   buildParcelAttachmentFileName,
   buildParcelAttachmentXlsx,
@@ -90,6 +92,23 @@ export async function GET(
   new Uint8Array(zipBody).set(zipBuffer);
   const caseNumber = sanitizeFileName(caseRow?.case_number ?? `case-${caseId}`);
   const fileName = `${caseNumber}_帳票一括_${buildDateStamp()}.zip`;
+
+  await logAudit({
+    userId: user.id,
+    action: "document.download",
+    entityType: "case",
+    entityId: caseId,
+    detail: {
+      caseId,
+      documentIds: histories.map((history) => history.id),
+      fileNames: histories.map((history) => history.file_name),
+      fileCount,
+      includeParcelAttachment,
+      downloadMode: "bulk_zip",
+      zipFileName: fileName,
+    },
+    ipAddress: requestIpFromHeaders(req.headers),
+  });
 
   return new NextResponse(zipBody, {
     headers: {

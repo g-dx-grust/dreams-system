@@ -7,6 +7,7 @@ import { listCases, listAssignableUsers } from "@/server/cases";
 import { getCurrentUser } from "@/lib/permissions";
 import { CasesFilter } from "@/components/cases/cases-filter";
 import { CasesTable } from "@/components/cases/cases-table";
+import { isOverdue } from "@/lib/format";
 
 type Search = {
   q?: string;
@@ -53,6 +54,9 @@ export default async function CasesPage({ searchParams }: { searchParams: Promis
   const isAdmin = currentUser?.role === "admin";
   const rangeStart = total === 0 ? 0 : (page - 1) * perPage + 1;
   const rangeEnd = Math.min(page * perPage, total);
+  const visibleOverdue = items.filter((item) => isOverdue(item.deadline_date, item.status)).length;
+  const visibleInProgress = items.filter((item) => item.status === "in_progress").length;
+  const visibleSubmitted = items.filter((item) => item.status === "submitted").length;
 
   return (
     <>
@@ -66,7 +70,19 @@ export default async function CasesPage({ searchParams }: { searchParams: Promis
         }
       />
 
-      <Card className="mb-m">
+      <section className="mb-m grid grid-cols-2 gap-s lg:grid-cols-4" aria-label="案件一覧サマリ">
+        <SummaryTile label="全案件" value={total} note={`${rangeStart}〜${rangeEnd}件を表示`} />
+        <SummaryTile label="表示中の進行中" value={visibleInProgress} note="対応が進行中の案件" />
+        <SummaryTile label="表示中の提出済み" value={visibleSubmitted} note="提出後の確認対象" />
+        <SummaryTile
+          label="表示中の期限超過"
+          value={visibleOverdue}
+          note="締切日を過ぎた案件"
+          danger={visibleOverdue > 0}
+        />
+      </section>
+
+      <Card className="mb-m border-border-strong">
         <CasesFilter users={users} />
       </Card>
 
@@ -116,6 +132,29 @@ export default async function CasesPage({ searchParams }: { searchParams: Promis
         </div>
       )}
     </>
+  );
+}
+
+function SummaryTile({
+  label,
+  value,
+  note,
+  danger = false,
+}: {
+  label: string;
+  value: number;
+  note: string;
+  danger?: boolean;
+}) {
+  return (
+    <div className="rounded-m border border-border bg-white px-m py-s shadow-s">
+      <p className="text-xs font-semibold text-text-grey">{label}</p>
+      <p className={danger ? "mt-xxs text-xl font-semibold text-danger" : "mt-xxs text-xl font-semibold text-text-black"}>
+        <span className="tabular-nums">{value.toLocaleString("ja-JP")}</span>
+        <span className="ml-xxs text-s font-normal text-text-grey">件</span>
+      </p>
+      <p className="mt-xxs text-xs text-text-quaternary">{note}</p>
+    </div>
   );
 }
 

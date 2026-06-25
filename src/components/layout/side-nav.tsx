@@ -8,14 +8,12 @@ import {
   CalendarDays,
   ContactRound,
   FileClock,
+  FilePlus2,
   LayoutDashboard,
   LayoutTemplate,
   MapPin,
-  PanelLeftClose,
-  PanelLeftOpen,
   ShieldCheck,
   Users,
-  X,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { AppUser } from "@/lib/permissions";
@@ -25,7 +23,7 @@ type NavItem = {
   href: string;
   label: string;
   icon: LucideIcon;
-  section: "workspace" | "admin";
+  section: "workspace" | "records" | "admin";
   adminOnly?: boolean;
 };
 
@@ -34,13 +32,13 @@ const items: NavItem[] = [
   { href: "/cases", label: "案件", icon: BriefcaseBusiness, section: "workspace" },
   { href: "/calendar", label: "カレンダー", icon: CalendarDays, section: "workspace" },
   { href: "/map", label: "地図", icon: MapPin, section: "workspace" },
-  { href: "/persons", label: "関係者台帳", icon: ContactRound, section: "workspace" },
-  { href: "/documents", label: "帳票履歴", icon: FileClock, section: "workspace" },
+  { href: "/persons", label: "関係者台帳", icon: ContactRound, section: "records" },
+  { href: "/documents", label: "帳票履歴", icon: FileClock, section: "records" },
   {
     href: "/templates",
     label: "テンプレート",
     icon: LayoutTemplate,
-    section: "admin",
+    section: "records",
     adminOnly: true,
   },
   { href: "/users", label: "ユーザー管理", icon: Users, section: "admin", adminOnly: true },
@@ -49,6 +47,7 @@ const items: NavItem[] = [
 
 const sections = [
   { key: "workspace" as const, label: "業務" },
+  { key: "records" as const, label: "台帳・帳票" },
   { key: "admin" as const, label: "管理" },
 ];
 
@@ -79,62 +78,81 @@ export function SideNav({
     <>
       <div
         className={cn(
-          "border-b border-border p-s",
-          isCollapsed
-            ? "flex flex-col items-center gap-s"
-            : "flex min-h-[var(--height-app-header)] items-center justify-between gap-s",
+          "border-b border-border bg-white p-s",
+          isCollapsed ? "flex flex-col items-center gap-s" : "space-y-s",
         )}
       >
-        <Link
-          href="/"
-          aria-label="ダッシュボードへ移動"
-          onClick={mobile ? onCloseMobile : undefined}
+        <div
           className={cn(
-            "flex min-w-0 items-center gap-s rounded-s text-text-black transition-colors hover:bg-grey-7",
-            isCollapsed ? "h-9 w-9 justify-center" : "min-w-0 flex-1 px-xs py-xs",
+            isCollapsed
+              ? "flex flex-col items-center gap-s"
+              : "flex min-h-10 items-center justify-between gap-s",
           )}
         >
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-m bg-grust-navy text-l font-bold leading-none text-white">
-            d
-          </span>
-          <span className={cn("min-w-0", isCollapsed && "sr-only")}>
-            <span className="block truncate text-l font-semibold leading-tight tracking-tight text-text-black">
-              dreaMs
-            </span>
-            <span className="block truncate text-xs leading-tight text-text-quaternary">
-              案件管理システム
-            </span>
-          </span>
-        </Link>
-
-        {mobile ? (
-          <Button
-            type="button"
-            variant="secondary"
-            size="md"
-            className="h-8 w-8 shrink-0 px-0"
-            aria-label="メニューを閉じる"
-            onClick={onCloseMobile}
-          >
-            <X className="h-[18px] w-[18px]" aria-hidden="true" />
-          </Button>
-        ) : (
-          <Button
-            type="button"
-            variant="secondary"
-            size="md"
-            className="h-8 w-8 shrink-0 px-0"
-            aria-label={isCollapsed ? "サイドバーを開く" : "サイドバーを閉じる"}
-            title={isCollapsed ? "サイドバーを開く" : "サイドバーを閉じる"}
-            onClick={onToggleCollapse}
-          >
-            {isCollapsed ? (
-              <PanelLeftOpen className="h-[18px] w-[18px]" aria-hidden="true" />
-            ) : (
-              <PanelLeftClose className="h-[18px] w-[18px]" aria-hidden="true" />
+          <Link
+            href="/"
+            aria-label="ダッシュボードへ移動"
+            onClick={mobile ? onCloseMobile : undefined}
+            className={cn(
+              "flex min-w-0 items-center gap-s rounded-s text-text-black transition-colors hover:bg-main-soft",
+              isCollapsed ? "h-9 w-9 justify-center" : "min-w-0 flex-1 px-xs py-xs",
             )}
-          </Button>
-        )}
+          >
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-s bg-grust-navy text-xs font-semibold leading-none text-white">
+              DX
+            </span>
+            <span className={cn("min-w-0", isCollapsed && "sr-only")}>
+              <span className="block truncate text-m font-semibold leading-tight text-text-black">
+                dreaMs
+              </span>
+              <span className="block truncate text-xs leading-tight text-text-grey">
+                案件管理・帳票転記
+              </span>
+            </span>
+          </Link>
+
+          {mobile ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              className="h-8 w-8 shrink-0 border-border-strong bg-grey-7 px-0 hover:bg-grey-9"
+              aria-label="メニューを閉じる"
+              onClick={onCloseMobile}
+            >
+              <span className="text-l font-semibold leading-none text-text-black" aria-hidden="true">
+                ×
+              </span>
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              className="h-8 w-8 shrink-0 border-border-strong bg-grey-7 px-0 hover:bg-grey-9"
+              aria-label={isCollapsed ? "サイドバーを開く" : "サイドバーを閉じる"}
+              title={isCollapsed ? "サイドバーを開く" : "サイドバーを閉じる"}
+              onClick={onToggleCollapse}
+            >
+              <span className="text-l font-semibold leading-none text-text-black" aria-hidden="true">
+                {isCollapsed ? "›" : "‹"}
+              </span>
+            </Button>
+          )}
+        </div>
+
+        <Link
+          href="/cases/new"
+          onClick={mobile ? onCloseMobile : undefined}
+          title={isCollapsed ? "案件を登録する" : undefined}
+          className={cn(
+            "flex h-8 items-center justify-center gap-xs rounded-s bg-grust-navy px-s text-s font-semibold text-white transition-colors hover:bg-main-darken",
+            isCollapsed && "w-8 px-0",
+          )}
+        >
+          <FilePlus2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span className={cn(isCollapsed && "sr-only")}>案件を登録する</span>
+        </Link>
       </div>
 
       <nav
@@ -149,7 +167,7 @@ export function SideNav({
             <div key={section.key}>
               <p
                 className={cn(
-                  "px-s pb-xs text-xs font-medium text-text-quaternary",
+                  "px-s pb-xs text-xs font-semibold text-text-quaternary",
                   isCollapsed && "sr-only",
                 )}
               >
@@ -168,23 +186,14 @@ export function SideNav({
                       title={isCollapsed ? item.label : undefined}
                       onClick={mobile ? onCloseMobile : undefined}
                       className={cn(
-                        "relative flex min-h-10 items-center gap-s rounded-s px-s text-m transition-colors",
+                        "flex min-h-10 items-center gap-s rounded-s border px-s text-s transition-colors",
                         isCollapsed && "justify-center px-0",
                         isActive
-                          ? "bg-main-soft font-semibold text-main"
-                          : "font-medium text-text-black hover:bg-grey-7",
+                          ? "border-main/20 bg-main-soft font-semibold text-main"
+                          : "border-transparent font-medium text-text-black hover:border-border hover:bg-grey-7",
                       )}
                     >
-                      {isActive && (
-                        <span
-                          className="absolute inset-y-1 left-0 w-[3px] rounded-r-full bg-main"
-                          aria-hidden="true"
-                        />
-                      )}
-                      <Icon
-                        className="h-[18px] w-[18px] shrink-0"
-                        strokeWidth={isActive ? 2.25 : 2}
-                      />
+                      <Icon className="h-4 w-4 shrink-0" strokeWidth={isActive ? 2.25 : 2} />
                       <span className={cn("truncate leading-tight", isCollapsed && "sr-only")}>
                         {item.label}
                       </span>
@@ -196,6 +205,27 @@ export function SideNav({
           );
         })}
       </nav>
+
+      <div
+        className={cn(
+          "border-t border-border px-s py-s",
+          isCollapsed ? "text-center" : "text-left",
+        )}
+      >
+        <p className={cn("text-xs text-text-quaternary", isCollapsed && "sr-only")}>権限</p>
+        <p
+          className={cn(
+            "mt-xxs rounded-s border border-border bg-grey-5 px-s py-xs text-xs font-semibold text-text-grey",
+            isCollapsed && "px-xxs",
+          )}
+          title={user.role === "admin" ? "管理者" : "一般ユーザー"}
+        >
+          <span className={cn(isCollapsed && "sr-only")}>
+            {user.role === "admin" ? "管理者" : "一般ユーザー"}
+          </span>
+          {isCollapsed && <span aria-hidden="true">{user.role === "admin" ? "管" : "一"}</span>}
+        </p>
+      </div>
     </>
   );
 
