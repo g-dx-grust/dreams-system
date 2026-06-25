@@ -13,6 +13,7 @@ import { fillXlsx } from "@/lib/transfer/xlsx";
 import { formatMissingRequiredMessage, preCheck } from "@/lib/transfer/precheck";
 import { isDebugTemplateDescription } from "@/lib/templates/check-template";
 import { normalizeMunicipalityName } from "@/lib/normalize";
+import { toTokyoDayStartIso, toTokyoNextDayStartIso } from "@/lib/date-time";
 import {
   buildFileName,
   buildStorageCaseFolder,
@@ -538,11 +539,10 @@ export async function listDocuments(params: ListDocumentsParams = {}): Promise<
     // ファイル名（テンプレート名・案件番号・版を含む命名規則）の部分一致で絞り込む。
     q = q.ilike("file_name", `%${escapeFilterValue(keyword)}%`);
   }
-  if (params.dateFrom) q = q.gte("created_at", params.dateFrom);
-  if (params.dateTo) {
-    // 期間（終了）は日付の終端まで含める（その日の 23:59:59 まで）。
-    q = q.lt("created_at", `${params.dateTo}T23:59:59.999`);
-  }
+  const dateFromIso = toTokyoDayStartIso(params.dateFrom);
+  const dateToIso = toTokyoNextDayStartIso(params.dateTo);
+  if (dateFromIso) q = q.gte("created_at", dateFromIso);
+  if (dateToIso) q = q.lt("created_at", dateToIso);
 
   const sort = resolveDocumentSort(params.sort, params.order);
   q = sort.referencedTable

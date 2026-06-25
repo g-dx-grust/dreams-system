@@ -4,6 +4,7 @@ import type { LucideIcon } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/cn";
+import { tokyoDateKeyAfterDays } from "@/lib/date-time";
 
 type SummaryData = {
   total_cases: number;
@@ -65,7 +66,7 @@ export function DashboardCards({
   asOf: string;
 }) {
   const d = data ?? EMPTY_SUMMARY;
-  const dueSoonHref = `/cases?deadline_to=${dateAfterDays(7)}`;
+  const dueSoonHref = `/cases?deadline_to=${tokyoDateKeyAfterDays(7)}`;
 
   const newCases = monthly.map((m) => m.new_cases);
   const completed = monthly.map((m) => m.completed_cases);
@@ -221,13 +222,4 @@ function formatRatio(ratio: number): string {
   const pct = Math.round(Math.abs(ratio) * 100);
   const sign = ratio > 0 ? "+" : "▲";
   return `${sign}${pct}%`;
-}
-
-function dateAfterDays(days: number): string {
-  const date = new Date();
-  date.setDate(date.getDate() + days);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
 }

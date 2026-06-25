@@ -1,8 +1,5 @@
-import {
-  CaseStatusLabels,
-  CaseTypeLabels,
-  CasePersonRoleLabels,
-} from "@/lib/validators/case";
+import { CaseStatusLabels, CaseTypeLabels, CasePersonRoleLabels } from "@/lib/validators/case";
+import { formatTokyoDate, todayTokyoDateKey } from "@/lib/date-time";
 
 export function caseTypeLabel(code: string): string {
   return (CaseTypeLabels as Record<string, string>)[code] ?? code;
@@ -58,20 +55,15 @@ export function formatJPY(v: number | null | undefined): string {
 }
 
 export function formatDate(v: string | null | undefined): string {
-  if (!v) return "—";
-  return new Date(v).toLocaleDateString("ja-JP");
+  return formatTokyoDate(v);
 }
 
-export function isOverdue(
-  deadline: string | null,
-  status: string,
-): boolean {
+export function isOverdue(deadline: string | null, status: string): boolean {
   if (!deadline) return false;
   if (status === "completed" || status === "cancelled") return false;
-  return new Date(deadline) < new Date(new Date().toDateString());
+  return deadline.slice(0, 10) < todayTokyoDateKey();
 }
 
 export function addressFull(parts: (string | null | undefined)[]): string {
   return parts.filter(Boolean).join(" ");
 }
-

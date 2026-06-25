@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { format } from "date-fns";
 import { getCurrentUser } from "@/lib/permissions";
 import { listAuditLogs } from "@/server/audit-logs";
 import { listUsers } from "@/server/users";
@@ -16,6 +15,7 @@ import {
 } from "@/components/audit-logs/audit-logs-filter";
 import { AuditLogDetailDialog } from "@/components/audit-logs/audit-log-detail-dialog";
 import { auditActionLabel, auditActionTone, auditEntityLabel } from "@/lib/audit-labels";
+import { formatTokyoDateTime } from "@/lib/date-time";
 
 const ACTION_OPTIONS = [
   "auth.login_success",
@@ -251,7 +251,7 @@ function PaginationLink({
 }
 
 function formatDateTime(value: string): string {
-  return format(new Date(value), "yyyy/MM/dd HH:mm:ss");
+  return formatTokyoDateTime(value, { seconds: true });
 }
 
 function formatEntityDisplayId(

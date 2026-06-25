@@ -8,6 +8,7 @@ import { getCurrentUser } from "@/lib/permissions";
 import { CasesFilter } from "@/components/cases/cases-filter";
 import { CasesTable } from "@/components/cases/cases-table";
 import { caseStatusLabel, isOverdue } from "@/lib/format";
+import { tokyoDateKeyAfterDays } from "@/lib/date-time";
 
 type Search = {
   q?: string;
@@ -54,6 +55,7 @@ export default async function CasesPage({ searchParams }: { searchParams: Promis
   const isAdmin = currentUser?.role === "admin";
   const rangeStart = total === 0 ? 0 : (page - 1) * perPage + 1;
   const rangeEnd = Math.min(page * perPage, total);
+  const dueSoonDateKey = tokyoDateKeyAfterDays(7);
   const visibleOverdue = items.filter((item) => isOverdue(item.deadline_date, item.status)).length;
   const visibleInProgress = items.filter((item) => item.status === "in_progress").length;
   const visibleSubmitted = items.filter((item) => item.status === "submitted").length;
@@ -61,7 +63,7 @@ export default async function CasesPage({ searchParams }: { searchParams: Promis
     (item) =>
       !isOverdue(item.deadline_date, item.status) &&
       item.deadline_date != null &&
-      new Date(item.deadline_date) <= dateAfterDays(7),
+      item.deadline_date <= dueSoonDateKey,
   ).length;
 
   return (
@@ -93,10 +95,7 @@ export default async function CasesPage({ searchParams }: { searchParams: Promis
         <StatusTabLink href={statusHref(sp, "overdue")} active={sp.overdue === "1"}>
           期限超過 <Count value={visibleOverdue} danger={visibleOverdue > 0} />
         </StatusTabLink>
-        <StatusTabLink
-          href={statusHref(sp, "due_soon")}
-          active={sp.deadline_to === formatDateParam(dateAfterDays(7))}
-        >
+        <StatusTabLink href={statusHref(sp, "due_soon")} active={sp.deadline_to === dueSoonDateKey}>
           期限間近 <Count value={visibleDueSoon} />
         </StatusTabLink>
       </div>
@@ -201,23 +200,9 @@ function statusHref(
   if (search.order) params.set("order", search.order);
   if (status === "in_progress" || status === "submitted") params.set("status", status);
   if (status === "overdue") params.set("overdue", "1");
-  if (status === "due_soon") params.set("deadline_to", formatDateParam(dateAfterDays(7)));
+  if (status === "due_soon") params.set("deadline_to", tokyoDateKeyAfterDays(7));
   const qs = params.toString();
   return qs ? `/cases?${qs}` : "/cases";
-}
-
-function dateAfterDays(days: number): Date {
-  const date = new Date();
-  date.setHours(0, 0, 0, 0);
-  date.setDate(date.getDate() + days);
-  return date;
-}
-
-function formatDateParam(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
 }
 
 function PaginationLink({

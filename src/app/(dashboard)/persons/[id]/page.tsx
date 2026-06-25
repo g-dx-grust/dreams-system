@@ -5,13 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getPerson } from "@/server/persons";
+import { formatTokyoDateTime } from "@/lib/date-time";
 import { casePersonRoleLabel } from "@/lib/format";
 
-export default async function PersonDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function PersonDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const res = await getPerson(Number(id));
   if (!res.ok) notFound();
@@ -79,12 +76,8 @@ export default async function PersonDetailPage({
             </DetailRow>
           )}
 
-          <DetailRow label="登録日">
-            {new Date(p.created_at).toLocaleString("ja-JP")}
-          </DetailRow>
-          <DetailRow label="更新日">
-            {new Date(p.updated_at).toLocaleString("ja-JP")}
-          </DetailRow>
+          <DetailRow label="登録日">{formatTokyoDateTime(p.created_at)}</DetailRow>
+          <DetailRow label="更新日">{formatTokyoDateTime(p.updated_at)}</DetailRow>
         </CardBody>
       </Card>
     </>

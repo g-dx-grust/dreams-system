@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { toTokyoDayStartIso, toTokyoNextDayStartIso } from "@/lib/date-time";
 import { requireAdmin } from "@/lib/permissions";
 import { type ActionResult, fail, ok } from "@/lib/result";
 
@@ -59,8 +60,10 @@ export async function listAuditLogs(params: ListAuditLogsParams = {}): Promise<
   if (params.action) query = query.eq("action", params.action);
   if (params.entityType) query = query.eq("entity_type", params.entityType);
   if (params.userId) query = query.eq("user_id", params.userId);
-  if (params.dateFrom) query = query.gte("created_at", `${params.dateFrom}T00:00:00`);
-  if (params.dateTo) query = query.lte("created_at", `${params.dateTo}T23:59:59.999`);
+  const dateFromIso = toTokyoDayStartIso(params.dateFrom);
+  const dateToIso = toTokyoNextDayStartIso(params.dateTo);
+  if (dateFromIso) query = query.gte("created_at", dateFromIso);
+  if (dateToIso) query = query.lt("created_at", dateToIso);
 
   const keyword = params.q?.trim();
   if (keyword) {

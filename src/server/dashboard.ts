@@ -1,4 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
+import {
+  monthKeyInTokyo,
+  todayTokyoDateKey,
+  tokyoDateKeyAfterDays,
+  tokyoMonthKeyOffset,
+} from "@/lib/date-time";
 import { CaseTypeLabels } from "@/lib/validators/case";
 
 export type DashboardSummary = {
@@ -109,8 +115,8 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
 
   if (error) return EMPTY_SUMMARY;
 
-  const today = dateKey(new Date());
-  const dueSoon = dateAfterDaysKey(7);
+  const today = todayTokyoDateKey();
+  const dueSoon = tokyoDateKeyAfterDays(7);
   const rows = (data ?? []) as Array<Pick<CaseDashboardRow, "status" | "deadline_date">>;
 
   return {
@@ -272,7 +278,7 @@ function buildClientMonthly(
   for (const caseRow of cases) {
     const financial = financialByCaseId.get(caseRow.id);
     const client = clientNameOf(personsByCaseId.get(caseRow.id) ?? []);
-    const month = caseRow.created_at.slice(0, 7);
+    const month = monthKeyInTokyo(new Date(caseRow.created_at));
     const key = `${client}:${month}`;
     const current =
       rows.get(key) ??
@@ -413,29 +419,5 @@ function workCategoryOf(caseType: string): WorkCategorySalesRow["category"] {
 }
 
 function lastTwelveMonths(): string[] {
-  const base = new Date();
-  base.setDate(1);
-  return Array.from({ length: 12 }, (_, index) => {
-    const date = new Date(base);
-    date.setMonth(base.getMonth() - (11 - index));
-    return dateKey(date).slice(0, 7);
-  });
-}
-
-function dateAfterDaysKey(days: number): string {
-  const date = new Date();
-  date.setDate(date.getDate() + days);
-  return dateKey(date);
-}
-
-function dateKey(date: Date): string {
-  const parts = new Intl.DateTimeFormat("ja-JP", {
-    timeZone: "Asia/Tokyo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(date);
-  const get = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((part) => part.type === type)?.value ?? "";
-  return `${get("year")}-${get("month")}-${get("day")}`;
+  return Array.from({ length: 12 }, (_, index) => tokyoMonthKeyOffset(index - 11));
 }

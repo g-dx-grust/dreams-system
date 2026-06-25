@@ -4,6 +4,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { SortHeader } from "@/components/common/sort-header";
 import { Badge } from "@/components/ui/badge";
+import { formatTokyoDateTime } from "@/lib/date-time";
 import type { DocumentHistoryListRow } from "@/server/documents";
 
 type Props = {
@@ -11,21 +12,6 @@ type Props = {
   showCaseNumber?: boolean;
   sortable?: boolean;
 };
-
-const DATE_TIME_FORMAT = new Intl.DateTimeFormat("ja-JP", {
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-  hour12: false,
-});
-
-// 同日に複数版が生成されるため、生成日時は時刻まで表示して区別する。
-function formatDateTime(v: string | null | undefined): string {
-  if (!v) return "—";
-  return DATE_TIME_FORMAT.format(new Date(v));
-}
 
 export function DocumentHistoryTable({ items, showCaseNumber, sortable }: Props) {
   if (items.length === 0) {
@@ -79,7 +65,7 @@ export function DocumentHistoryTable({ items, showCaseNumber, sortable }: Props)
             </TD>
             <TD numeric>v{row.version}</TD>
             <TD className="tabular-nums whitespace-nowrap text-text-grey">
-              {formatDateTime(row.created_at)}
+              {formatTokyoDateTime(row.created_at)}
             </TD>
             <TD>
               <a
