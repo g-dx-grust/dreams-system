@@ -6,11 +6,11 @@ import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import {
   BriefcaseBusiness,
-  ChevronDown,
   ContactRound,
   FileClock,
   LayoutDashboard,
   LayoutTemplate,
+  LogOut,
   MapPin,
   PanelLeftClose,
   PanelLeftOpen,
@@ -58,6 +58,7 @@ type SideNavProps = {
   onToggleCollapse: () => void;
   mobileOpen: boolean;
   onCloseMobile: () => void;
+  signOutAction: () => Promise<void>;
 };
 
 export function SideNav({
@@ -66,6 +67,7 @@ export function SideNav({
   onToggleCollapse,
   mobileOpen,
   onCloseMobile,
+  signOutAction,
 }: SideNavProps) {
   const pathname = usePathname();
   const visibleItems = items.filter((item) => !item.adminOnly || user.role === "admin");
@@ -119,25 +121,37 @@ export function SideNav({
 
         <div
           className={cn(
-            "mt-l flex items-center gap-s rounded-l border border-white/10 bg-white/10 px-s py-s text-white",
-            isCollapsed && "justify-center px-0",
+            "mt-l rounded-l border border-white/10 bg-white/10 p-s text-white",
+            isCollapsed && "flex flex-col items-center",
           )}
         >
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15 text-s font-semibold text-white">
-            {(user.fullName || user.email).slice(0, 1)}
+          <div className={cn("flex items-center gap-s", isCollapsed && "justify-center")}>
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15 text-s font-semibold text-white">
+              {(user.fullName || user.email).slice(0, 1)}
+            </div>
+            <div className={cn("min-w-0 flex-1", isCollapsed && "sr-only")}>
+              <p className="truncate text-s font-semibold leading-tight text-white">
+                {user.fullName || "開発管理者"}
+              </p>
+              <p className="mt-xxs truncate text-xs text-white/70">
+                {user.role === "admin" ? "管理者" : "一般ユーザー"}
+              </p>
+            </div>
           </div>
-          <div className={cn("min-w-0 flex-1", isCollapsed && "sr-only")}>
-            <p className="truncate text-s font-semibold leading-tight text-white">
-              {user.fullName || "開発管理者"}
-            </p>
-            <p className="mt-xxs truncate text-xs text-white/70">
-              {user.role === "admin" ? "開発部" : "一般ユーザー"}
-            </p>
-          </div>
-          <ChevronDown
-            className={cn("h-4 w-4 shrink-0 text-white/70", isCollapsed && "sr-only")}
-            aria-hidden="true"
-          />
+          <form action={signOutAction} className={cn("mt-s", isCollapsed ? "w-10" : "w-full")}>
+            <button
+              type="submit"
+              className={cn(
+                "flex h-8 w-full items-center justify-center gap-xs rounded-s border border-white/15 px-s text-xs font-semibold text-white/80 hover:bg-white/10 hover:text-white",
+                isCollapsed && "px-0",
+              )}
+              aria-label="ログアウト"
+              title="ログアウト"
+            >
+              <LogOut className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <span className={cn(isCollapsed && "sr-only")}>ログアウト</span>
+            </button>
+          </form>
         </div>
       </div>
 

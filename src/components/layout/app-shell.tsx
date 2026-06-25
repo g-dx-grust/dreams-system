@@ -65,13 +65,10 @@ export function AppShell({
           onToggleCollapse={toggleCollapse}
           mobileOpen={mobileOpen}
           onCloseMobile={() => setMobileOpen(false)}
+          signOutAction={signOutAction}
         />
         <div className="flex min-w-0 flex-1 flex-col">
-          <AppHeader
-            user={user}
-            signOutAction={signOutAction}
-            onHamburger={() => setMobileOpen(true)}
-          />
+          <AppHeader onHamburger={() => setMobileOpen(true)} />
           <main
             id="main-content"
             className="flex-1 overflow-x-hidden overflow-y-auto px-m py-l lg:px-xl"

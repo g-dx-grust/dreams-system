@@ -1,23 +1,12 @@
 "use client";
 
-import { usePathname } from "next/navigation";
-import { Bell, CircleHelp, LogOut, Menu } from "lucide-react";
-import type { AppUser } from "@/lib/permissions";
-import { Button } from "@/components/ui/button";
-import { resolveRouteMeta } from "./dashboard-route-utils";
+import { Bell, CircleHelp, Menu } from "lucide-react";
 
 export function AppHeader({
-  user,
-  signOutAction,
   onHamburger,
 }: {
-  user: AppUser;
-  signOutAction: () => Promise<void>;
   onHamburger: () => void;
 }) {
-  const pathname = usePathname();
-  const meta = resolveRouteMeta(pathname);
-
   return (
     <header
       className="flex shrink-0 items-center justify-between gap-m border-b border-border bg-white px-l text-text-black"
@@ -32,14 +21,6 @@ export function AppHeader({
         >
           <Menu className="h-[18px] w-[18px]" aria-hidden="true" />
         </button>
-        <div className="flex min-w-0 items-center gap-s">
-          <span className="text-xl font-semibold leading-none text-main tabular-nums">
-            {meta.number}
-          </span>
-          <h1 className="truncate text-l font-semibold leading-tight text-text-black">
-            {meta.title}
-          </h1>
-        </div>
       </div>
 
       <div className="flex shrink-0 items-center gap-s">
@@ -58,21 +39,6 @@ export function AppHeader({
         >
           <CircleHelp className="h-5 w-5" aria-hidden="true" />
         </button>
-        <div className="hidden h-6 w-px bg-border sm:block" aria-hidden="true" />
-        <div className="hidden max-w-[220px] text-right leading-tight md:block">
-          <p className="truncate text-s font-semibold text-text-black">
-            {user.fullName || user.email}
-          </p>
-          <p className="text-xs text-text-grey">
-            {user.role === "admin" ? "管理者" : "一般ユーザー"}
-          </p>
-        </div>
-        <form action={signOutAction}>
-          <Button type="submit" variant="secondary" size="sm" className="h-8 px-s">
-            <LogOut className="h-4 w-4" aria-hidden="true" />
-            <span className="hidden sm:inline">ログアウト</span>
-          </Button>
-        </form>
       </div>
     </header>
   );
