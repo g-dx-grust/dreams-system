@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import {
   BriefcaseBusiness,
-  CalendarDays,
   ContactRound,
   FileClock,
   FilePlus2,
@@ -30,7 +29,6 @@ type NavItem = {
 const items: NavItem[] = [
   { href: "/", label: "ダッシュボード", icon: LayoutDashboard, section: "workspace" },
   { href: "/cases", label: "案件", icon: BriefcaseBusiness, section: "workspace" },
-  { href: "/calendar", label: "カレンダー", icon: CalendarDays, section: "workspace" },
   { href: "/map", label: "地図", icon: MapPin, section: "workspace" },
   { href: "/persons", label: "関係者台帳", icon: ContactRound, section: "records" },
   { href: "/documents", label: "帳票履歴", icon: FileClock, section: "records" },

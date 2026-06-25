@@ -1,7 +1,5 @@
-import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/permissions";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -19,27 +17,6 @@ type CaseSearchItem = {
   caseNumber: string;
   caseName: string;
 };
-
-function secureEquals(a: string, b: string): boolean {
-  const aBuffer = Buffer.from(a);
-  const bBuffer = Buffer.from(b);
-  if (aBuffer.length !== bBuffer.length) return false;
-  return timingSafeEqual(aBuffer, bBuffer);
-}
-
-function hasValidCalendarSecret(request: Request): boolean {
-  const configured = process.env.KANRI_CALENDAR_API_SECRET;
-  if (!configured) return false;
-
-  const headerSecret = request.headers.get("x-kanri-calendar-secret");
-  const bearerSecret = request.headers
-    .get("authorization")
-    ?.replace(/^Bearer\s+/i, "");
-
-  return [headerSecret, bearerSecret].some(
-    (candidate) => candidate != null && secureEquals(candidate, configured),
-  );
-}
 
 function toPattern(query: string): string {
   return `%${query.replace(/[%_]/g, "").slice(0, 50)}%`;
@@ -61,16 +38,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ items: [] satisfies CaseSearchItem[] });
   }
 
-  const useAdminClient = hasValidCalendarSecret(request);
-
   try {
-    if (!useAdminClient) {
-      await requireUser();
-    }
+    await requireUser();
 
-    const supabase = useAdminClient
-      ? createAdminClient()
-      : await createClient();
+    const supabase = await createClient();
     const pattern = toPattern(query);
 
     const [numberResult, nameResult] = await Promise.all([

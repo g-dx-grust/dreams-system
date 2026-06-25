@@ -3,7 +3,6 @@
 import * as React from "react";
 import { usePathname } from "next/navigation";
 import type { AppUser } from "@/lib/permissions";
-import { cn } from "@/lib/cn";
 import { SideNav } from "./side-nav";
 import { AppHeader } from "./app-header";
 import { isTemplateMappingWorkspace } from "./dashboard-route-utils";
@@ -27,7 +26,6 @@ export function AppShell({
   const pathname = usePathname();
   const [collapsed, setCollapsed] = React.useState(initialCollapsed);
   const [mobileOpen, setMobileOpen] = React.useState(false);
-  const isCalendarRoute = pathname === "/calendar" || pathname.startsWith("/calendar/");
 
   React.useEffect(() => {
     setMobileOpen(false);
@@ -78,14 +76,7 @@ export function AppShell({
             id="main-content"
             className="flex-1 overflow-x-hidden overflow-y-auto px-m py-m"
           >
-            <div
-              className={cn(
-                "mx-auto",
-                isCalendarRoute ? "max-w-none" : "max-w-[var(--width-content-max)]",
-              )}
-            >
-              {children}
-            </div>
+            <div className="mx-auto max-w-[var(--width-content-max)]">{children}</div>
           </main>
         </div>
       </div>
