@@ -16,3 +16,7 @@ export function normalizeZip(zip: string): string {
 export function normalizePhone(phone: string): string {
   return phone.replace(/[^\d]/g, "");
 }
+
+export function normalizeMunicipalityName(value: string | null | undefined): string {
+  return (value ?? "").replace(/\s+/g, "").trim();
+}

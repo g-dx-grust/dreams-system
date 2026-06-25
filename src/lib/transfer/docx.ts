@@ -99,23 +99,6 @@ function normalizeTextutilWordXml(xml: string) {
 
 const LEGACY_EQ_OVERLAY_PATTERN = /eq\s*\\o\\ac\(○,\s*([0-9０-９]+|印)\s*\)/gu;
 
-function normalizeNumberToken(value: string) {
-  return value.replace(/[０-９]/g, (char) =>
-    String.fromCharCode(char.charCodeAt(0) - 0xfee0),
-  );
-}
-
-function resolveLegacyEqOverlayValue(value: string): string | null {
-  if (value === "印") return "㊞";
-
-  const numericValue = Number.parseInt(normalizeNumberToken(value), 10);
-  if (!Number.isInteger(numericValue) || numericValue < 1 || numericValue > 20) {
-    return null;
-  }
-
-  return String.fromCharCode(0x245f + numericValue);
-}
-
 function normalizeLegacyEqOverlayText(paragraphXml: string) {
   const textNodes = [...paragraphXml.matchAll(/<w:t\b[^>]*>[\s\S]*?<\/w:t>/gu)].map((match) => {
     const fullMatch = match[0];
@@ -145,18 +128,13 @@ function normalizeLegacyEqOverlayText(paragraphXml: string) {
 
   const matches = [...flatText.matchAll(LEGACY_EQ_OVERLAY_PATTERN)]
     .map((match) => {
-      const replacement = resolveLegacyEqOverlayValue(match[1] ?? "");
-      if (!replacement) return null;
-
       return {
         start: match.index ?? 0,
         end: (match.index ?? 0) + match[0].length,
-        replacement,
+        replacement: "",
       };
     })
-    .filter((match): match is { start: number; end: number; replacement: string } =>
-      Boolean(match),
-    )
+    .filter((match): match is { start: number; end: number; replacement: string } => Boolean(match))
     .reverse();
 
   if (matches.length === 0) return paragraphXml;
@@ -202,13 +180,33 @@ function normalizeLegacyEqOverlays(xml: string) {
   );
 }
 
+function removeRoundButtonShapeRuns(xml: string) {
+  return xml.replace(/<w:r\b[\s\S]*?<\/w:r>/gu, (runXml) => {
+    if (runXml.includes("<w:drawing") && /<a:prstGeom\b[^>]*\bprst="ellipse"/u.test(runXml)) {
+      return "";
+    }
+
+    if (
+      runXml.includes("<w:pict") &&
+      /<(?:v:oval|v:shape)\b/iu.test(runXml) &&
+      /(?:oval|ellipse|○|_x0000_t75)/iu.test(runXml)
+    ) {
+      return "";
+    }
+
+    return runXml;
+  });
+}
+
 function normalizeWordXmlParts(zip: PizZip) {
   for (const fileName of Object.keys(zip.files)) {
     const file = zip.files[fileName];
     if (!file || file.dir || !/^word\/.+\.xml$/u.test(fileName)) continue;
 
     const xml = file.asText();
-    const normalized = normalizeLegacyEqOverlays(normalizeTextutilWordXml(xml));
+    const normalized = normalizeLegacyEqOverlays(
+      removeRoundButtonShapeRuns(normalizeTextutilWordXml(xml)),
+    );
     if (normalized !== xml) {
       zip.file(fileName, normalized);
     }
@@ -234,6 +232,27 @@ function generateDocxPackage(zip: PizZip): Buffer {
   return output.generate({ type: "nodebuffer", compression: "DEFLATE" }) as Buffer;
 }
 
+function normalizeDocxRenderValue(value: unknown): unknown {
+  if (typeof value === "string") {
+    return value.replace(/\r\n?/g, "\n").replace(/\n+/g, "");
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeDocxRenderValue(item));
+  }
+
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, child]) => [
+        key,
+        normalizeDocxRenderValue(child),
+      ]),
+    );
+  }
+
+  return value;
+}
+
 export function fillDocx(
   templateBuffer: ArrayBuffer,
   context: TransferContext,
@@ -246,12 +265,12 @@ export function fillDocx(
   const mappingLookup = buildMappingLookup(mappings);
   const doc = new Docxtemplater(zip, {
     paragraphLoop: true,
-    linebreaks: true,
+    linebreaks: false,
     delimiters: { start: "{", end: "}" },
     nullGetter: () => "",
     parser: createTransferParser(mappingLookup),
   });
-  doc.render(context as Record<string, unknown>);
+  doc.render(normalizeDocxRenderValue(context) as Record<string, unknown>);
   normalizeWordXmlParts(doc.getZip());
   return generateDocxPackage(doc.getZip());
 }

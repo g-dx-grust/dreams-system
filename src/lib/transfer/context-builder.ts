@@ -36,6 +36,8 @@ const EMPTY_PARCEL: ParcelContext = {
   tenyoArea: "",
 };
 
+const BLANK_DATE_LABEL = "年月日";
+
 export function buildPersonContext(cp: CasePersonRow): PersonContext {
   const parts = [
     cp.snapshot_address_pref,
@@ -73,7 +75,6 @@ export function buildTransferContext(args: {
   parcels: CaseParcelRow[];
   financial?: CaseFinancialRow | null;
 }): TransferContext {
-  const today = new Date();
   const byRole = new Map<string, PersonContext>();
   const applicantList: PersonContext[] = [];
   const neighborList: PersonContext[] = [];
@@ -96,10 +97,7 @@ export function buildTransferContext(args: {
       chiban: p.chiban ?? "",
       locationFull: [p.city, p.oaza, p.aza, p.chiban].filter(Boolean).join(""),
       chimoku: p.chimoku ?? "",
-      area:
-        p.area != null
-          ? p.area.toLocaleString("ja-JP", { minimumFractionDigits: 2 })
-          : "",
+      area: p.area != null ? p.area.toLocaleString("ja-JP", { minimumFractionDigits: 2 }) : "",
       tenyoArea:
         p.tenyo_area != null
           ? p.tenyo_area.toLocaleString("ja-JP", { minimumFractionDigits: 2 })
@@ -116,19 +114,14 @@ export function buildTransferContext(args: {
     caseName: args.caseRow.case_name,
     caseMemo: args.caseRow.memo ?? "",
     caseTypeLabel:
-      (CaseTypeLabels as Record<string, string>)[args.caseRow.case_type] ??
-      args.caseRow.case_type,
+      (CaseTypeLabels as Record<string, string>)[args.caseRow.case_type] ?? args.caseRow.case_type,
     submissionTarget: args.caseRow.submission_target ?? "",
-    submissionDate: args.caseRow.submission_date
-      ? toWareki(new Date(args.caseRow.submission_date))
-      : "",
-    deadlineDate: args.caseRow.deadline_date
-      ? toWareki(new Date(args.caseRow.deadline_date))
-      : "",
-    today: toWareki(today),
-    todayYear: `令和${today.getFullYear() - 2018}年`,
-    todayMonth: String(today.getMonth() + 1),
-    todayDay: String(today.getDate()),
+    submissionDate: BLANK_DATE_LABEL,
+    deadlineDate: args.caseRow.deadline_date ? toWareki(new Date(args.caseRow.deadline_date)) : "",
+    today: BLANK_DATE_LABEL,
+    todayYear: "",
+    todayMonth: "",
+    todayDay: "",
     applicant: byRole.get("applicant") ?? EMPTY_PERSON,
     transferee: byRole.get("transferee") ?? EMPTY_PERSON,
     transferor: byRole.get("transferor") ?? EMPTY_PERSON,

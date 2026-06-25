@@ -15,6 +15,7 @@ import { buildTransferContext } from "@/lib/transfer/context-builder";
 import { preCheck } from "@/lib/transfer/precheck";
 import type { Mapping } from "@/lib/transfer/engine";
 import { isDebugTemplateDescription } from "@/lib/templates/check-template";
+import { normalizeMunicipalityName } from "@/lib/normalize";
 import { canonicalizeFieldPath, fieldLabel, suggestFieldEntry } from "@/lib/transfer/field-dict";
 import {
   AI_MAPPING_MODEL_DEFAULT,
@@ -316,6 +317,11 @@ function buildLocationLookup(locationAreas: LocationAreaRow[]) {
 function formatLocationLabel(location: TemplateLocationInfo | null) {
   if (!location) return null;
   return `${location.area_name} / ${location.prefecture_name} / ${location.municipality_name}`;
+}
+
+function buildMunicipalityFilter(names: string[] | undefined): Set<string> | null {
+  if (!names) return null;
+  return new Set(names.map(normalizeMunicipalityName).filter(Boolean));
 }
 
 function extractMappingCount(value: unknown) {
@@ -675,12 +681,16 @@ export async function listTemplates(params: ListTemplatesParams = {}): Promise<
 }
 
 export async function listTemplateGenerationOptions(
-  caseType?: string,
+  params: {
+    caseType?: string;
+    municipalityNames?: string[];
+  } = {},
 ): Promise<ActionResult<TemplateGenerationOption[]>> {
   await requireUser();
   const supabase = await createClient();
 
   try {
+    const municipalityFilter = buildMunicipalityFilter(params.municipalityNames);
     const [locationAreas, tmplRes] = await Promise.all([
       fetchLocationAreas(supabase),
       (async () => {
@@ -690,8 +700,8 @@ export async function listTemplateGenerationOptions(
             "id, name, file_type, version, description, municipality_id, template_categories!inner(name), template_mappings(count)",
           );
         q = q.eq("is_active", true);
-        if (isKnownCaseType(caseType)) {
-          q = q.or(buildApplicableCaseTypesFilter(caseType));
+        if (isKnownCaseType(params.caseType)) {
+          q = q.or(buildApplicableCaseTypesFilter(params.caseType));
         }
         return q.order("name", { ascending: true });
       })(),
@@ -724,16 +734,30 @@ export async function listTemplateGenerationOptions(
           version: row.version,
           category_name: row.template_categories?.name ?? "",
           location_label: formatLocationLabel(location),
+          municipality_id: row.municipality_id,
+          municipality_name: location?.municipality_name ?? null,
           description: row.description,
           mapping_count: mappingCount,
         };
+      })
+      .filter((template) => {
+        if (!municipalityFilter) return true;
+        if (template.municipality_id === null) return true;
+        return municipalityFilter.has(normalizeMunicipalityName(template.municipality_name));
       })
       .filter(
         (template) =>
           !isDebugTemplateDescription(template.description) &&
           (template.file_type !== "xlsx" || template.mapping_count > 0),
       )
-      .map(({ description: _description, ...template }) => template);
+      .map(
+        ({
+          description: _description,
+          municipality_id: _municipalityId,
+          municipality_name: _municipalityName,
+          ...template
+        }) => template,
+      );
 
     return ok(templates);
   } catch {

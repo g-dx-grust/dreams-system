@@ -3,12 +3,9 @@ import { getCurrentUser } from "@/lib/permissions";
 import { PageHeader } from "@/components/ui/page-header";
 import { DashboardCards } from "@/components/dashboard/cards";
 import { OverdueTable } from "@/components/dashboard/overdue-table";
-import { UnpaidTable } from "@/components/dashboard/unpaid-table";
-import { MonthlyChart } from "@/components/dashboard/monthly-chart";
-import {
-  EmployeeSalesTable,
-  type EmployeeSalesRow,
-} from "@/components/dashboard/employee-sales-table";
+import { type EmployeeSalesRow } from "@/components/dashboard/employee-sales-table";
+import { ExecutiveDashboardTabs } from "@/components/dashboard/executive-dashboard-tabs";
+import { getDashboardSummary, getExecutiveDashboardData } from "@/server/dashboard";
 
 function currentMonth(): string {
   const parts = new Intl.DateTimeFormat("ja-JP", {
@@ -47,33 +44,48 @@ export default async function DashboardPage({
   const { month: monthParam } = await searchParams;
   const month = normalizeMonth(monthParam);
 
-  const [summaryRes, overdueRes, unpaidRes, monthlyRes] = await Promise.all([
-    supabase.rpc("dashboard_summary"),
+  const [summary, overdueRes] = await Promise.all([
+    getDashboardSummary(),
     supabase.rpc("dashboard_overdue_cases", { p_limit: 20 }),
-    supabase.rpc("dashboard_unpaid_cases", { p_limit: 20 }),
-    supabase.rpc("dashboard_monthly_stats"),
   ]);
 
-  let employeeRows: EmployeeSalesRow[] = [];
-  if (isAdmin) {
-    const employeeRes = await supabase.rpc("dashboard_employee_daily_sales", {
-      p_month: month,
-    });
-    employeeRows = (employeeRes.data ?? []) as EmployeeSalesRow[];
+  const overdueRows = overdueRes.data ?? [];
+
+  if (!isAdmin) {
+    return (
+      <>
+        <PageHeader title="ダッシュボード" />
+        <div className="space-y-m">
+          <DashboardCards data={summary} monthly={[]} asOf={asOfLabel()} />
+          <OverdueTable rows={overdueRows} />
+        </div>
+      </>
+    );
   }
 
+  const [unpaidRes, monthlyRes, employeeRes, executiveData] = await Promise.all([
+    supabase.rpc("dashboard_unpaid_cases", { p_limit: 20 }),
+    supabase.rpc("dashboard_monthly_stats"),
+    supabase.rpc("dashboard_employee_daily_sales", { p_month: month }),
+    getExecutiveDashboardData(),
+  ]);
+
+  const employeeRows = (employeeRes.data ?? []) as EmployeeSalesRow[];
   const monthlyRows = monthlyRes.data ?? [];
 
   return (
     <>
       <PageHeader title="ダッシュボード" />
-      <div className="space-y-m">
-        <DashboardCards data={summaryRes.data} monthly={monthlyRows} asOf={asOfLabel()} />
-        {isAdmin && <EmployeeSalesTable month={month} rows={employeeRows} />}
-        <OverdueTable rows={overdueRes.data ?? []} />
-        <UnpaidTable rows={unpaidRes.data ?? []} />
-        <MonthlyChart rows={monthlyRows} />
-      </div>
+      <ExecutiveDashboardTabs
+        summary={summary}
+        monthlyRows={monthlyRows}
+        overdueRows={overdueRows}
+        unpaidRows={unpaidRes.data ?? []}
+        employeeRows={employeeRows}
+        employeeMonth={month}
+        asOf={asOfLabel()}
+        executiveData={executiveData}
+      />
     </>
   );
 }

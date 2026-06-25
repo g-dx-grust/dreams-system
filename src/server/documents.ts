@@ -12,6 +12,7 @@ import { fillDocx } from "@/lib/transfer/docx";
 import { fillXlsx } from "@/lib/transfer/xlsx";
 import { formatMissingRequiredMessage, preCheck } from "@/lib/transfer/precheck";
 import { isDebugTemplateDescription } from "@/lib/templates/check-template";
+import { normalizeMunicipalityName } from "@/lib/normalize";
 import {
   buildFileName,
   buildStorageCaseFolder,
@@ -111,21 +112,9 @@ export async function generateDocument(
       .eq("is_active", true)
       .single(),
     supabase.from("cases").select("*").eq("id", parsed.data.caseId).single(),
-    supabase
-      .from("case_persons")
-      .select("*")
-      .eq("case_id", parsed.data.caseId)
-      .order("sort_order"),
-    supabase
-      .from("case_parcels")
-      .select("*")
-      .eq("case_id", parsed.data.caseId)
-      .order("sort_order"),
-    supabase
-      .from("case_financials")
-      .select("*")
-      .eq("case_id", parsed.data.caseId)
-      .maybeSingle(),
+    supabase.from("case_persons").select("*").eq("case_id", parsed.data.caseId).order("sort_order"),
+    supabase.from("case_parcels").select("*").eq("case_id", parsed.data.caseId).order("sort_order"),
+    supabase.from("case_financials").select("*").eq("case_id", parsed.data.caseId).maybeSingle(),
   ]);
 
   if (tmplRes.error || !tmplRes.data)
@@ -139,6 +128,13 @@ export async function generateDocument(
     );
   }
   const fileType = template.file_type as "docx" | "xlsx";
+
+  const municipalityCheck = await validateTemplateMunicipalityForCase(
+    supabase,
+    template.municipality_id as number | null,
+    (parcelsRes.data ?? []) as CaseParcelRow[],
+  );
+  if (municipalityCheck) return fail(municipalityCheck);
 
   const storagePath = template.file_path.replace(/^templates\//, "");
   const { data: templateBlob, error: dlErr } = await supabase.storage
@@ -185,11 +181,7 @@ export async function generateDocument(
   const previewData = checkResult.previewData;
 
   for (let attempt = 0; attempt < DOCUMENT_SAVE_RETRIES; attempt += 1) {
-    const version = await nextDocumentVersion(
-      supabase,
-      parsed.data.caseId,
-      parsed.data.templateId,
-    );
+    const version = await nextDocumentVersion(supabase, parsed.data.caseId, parsed.data.templateId);
     const fileName = buildFileName(caseRow.case_number, template.name, version, fileType);
     const storageFileName = buildStorageFileName(
       caseRow.case_number,
@@ -293,14 +285,19 @@ export async function generateCaseDocuments(
   }
 
   const supabase = await createClient();
-  const { data: caseRow, error: caseError } = await supabase
-    .from("cases")
-    .select("id, case_type")
-    .eq("id", parsed.data.caseId)
-    .single();
+  const [caseRes, parcelsRes] = await Promise.all([
+    supabase.from("cases").select("id, case_type").eq("id", parsed.data.caseId).single(),
+    supabase.from("case_parcels").select("city").eq("case_id", parsed.data.caseId),
+  ]);
+  const { data: caseRow, error: caseError } = caseRes;
   if (caseError || !caseRow) return fail("案件が見つかりませんでした。");
 
-  const templatesResult = await listTemplateGenerationOptions(caseRow.case_type);
+  const templatesResult = await listTemplateGenerationOptions({
+    caseType: caseRow.case_type,
+    municipalityNames: ((parcelsRes.data ?? []) as Array<{ city: string | null }>).map(
+      (parcel) => parcel.city ?? "",
+    ),
+  });
   if (!templatesResult.ok) return fail(templatesResult.error);
 
   const requestedIds = new Set(parsed.data.templateIds ?? []);
@@ -406,6 +403,32 @@ async function removeGeneratedDocument(storageObjectPath: string) {
       message: error.message,
     });
   }
+}
+
+async function validateTemplateMunicipalityForCase(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  municipalityId: number | null,
+  parcels: CaseParcelRow[],
+): Promise<string | null> {
+  if (municipalityId === null) return null;
+
+  const targetCities = new Set(
+    parcels.map((parcel) => normalizeMunicipalityName(parcel.city)).filter(Boolean),
+  );
+  if (targetCities.size === 0) {
+    return "対象土地の市区町村が未入力のため、この自治体専用テンプレートは生成できません。";
+  }
+
+  const { data, error } = await supabase
+    .from("location_municipalities")
+    .select("name")
+    .eq("id", municipalityId)
+    .maybeSingle();
+  if (error || !data) return "テンプレートの地域設定を確認できませんでした。";
+
+  return targetCities.has(normalizeMunicipalityName(data.name))
+    ? null
+    : "対象土地と一致しない自治体専用テンプレートのため、生成できません。";
 }
 
 async function nextDocumentVersion(

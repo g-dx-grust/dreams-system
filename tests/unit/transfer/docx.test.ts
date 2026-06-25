@@ -219,7 +219,7 @@ describe("fillDocx", () => {
     expect(Object.values(outputZip.files).some((file) => file.dir)).toBe(false);
   });
 
-  it("旧Word変換由来のEQ丸数字と丸印を生成時に補正する", () => {
+  it("旧Word変換由来のEQ丸数字と丸印を生成時に空欄化する", () => {
     const zip = new PizZip(createDocxTemplate("{today}"));
     zip.file(
       "word/document.xml",
@@ -249,9 +249,10 @@ describe("fillDocx", () => {
     const xml = extractDocumentXml(rendered);
     const text = extractDocumentText(rendered);
 
-    expect(xml).toContain("①");
+    expect(xml).not.toContain("①");
+    expect(xml).not.toContain("㊞");
     expect(text).toContain("案内図");
-    expect(text).toContain("氏名 田中太郎 ㊞");
+    expect(text).toContain("氏名 田中太郎");
     expect(xml).not.toContain("eq \\o\\ac");
   });
 
@@ -284,12 +285,18 @@ describe("fillDocx", () => {
     const xml = extractDocumentXml(rendered);
     const text = extractDocumentText(rendered);
 
-    expect(text).toContain("① 資料1");
-    expect(text).toContain("② 資料2");
-    expect(text).toContain("③ 資料3");
-    expect(text).toContain("④ 資料4");
-    expect(text).toContain("⑤ 資料5");
-    expect(text).toContain("⑥ 資料6");
+    expect(text).toContain("資料1");
+    expect(text).toContain("資料2");
+    expect(text).toContain("資料3");
+    expect(text).toContain("資料4");
+    expect(text).toContain("資料5");
+    expect(text).toContain("資料6");
+    expect(text).not.toContain("①");
+    expect(text).not.toContain("②");
+    expect(text).not.toContain("③");
+    expect(text).not.toContain("④");
+    expect(text).not.toContain("⑤");
+    expect(text).not.toContain("⑥");
     expect(xml).not.toContain("eq \\o\\ac");
   });
 });

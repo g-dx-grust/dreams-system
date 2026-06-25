@@ -5,9 +5,9 @@
 ダッシュボードは **本システム内（Next.js）で内製** する。
 旧版にあった「LarkBase 連携前提」「LarkBase Webhook」は **破棄**（2026-04-23 決定）。
 
-- **実装**：Server Component から Supabase の RPC（集計関数）を直接呼ぶ。クライアント側状態管理は不要。
+- **実装**：スタッフ向けの案件数・期限系は Server Component で直接集計する。経営指標は社長アカウント（現行DBでは `admin` ロール）だけが取得・表示する。
 - **UI**：業務 SaaS らしく、テーブル中心の情報密度重視（CLAUDE.md §4.4）。
-- **チャート**：最小限。過去 12 ヶ月の月次推移くらい。多色を避け `CHART_1` 〜 `CHART_3` の範囲で描く。
+- **チャート**：比較用として一時的に3パターンのタブを置き、直感で選べるようにする。多色を避け `CHART_1` 〜 `CHART_8` の範囲で描く。
 
 ---
 
@@ -47,14 +47,35 @@
 
 ## 表示する指標
 
+### 権限分離
+
+| ロール                              | 表示する範囲                                                             |
+| ----------------------------------- | ------------------------------------------------------------------------ |
+| スタッフ（`user`）                  | 案件数、進行中、期限超過、期限間近、期限超過・期限間近テーブルのみ       |
+| 社長アカウント（現行DBでは`admin`） | スタッフ向け指標に加え、経営指標・売上・未入金・構成比・業者別分析を表示 |
+
+金額・請求・入金・売上・外注費は経営指標として扱い、スタッフ画面では取得も表示もしない。
+
+### 比較用ダッシュボードタブ（一時）
+
+社長アカウントには、ダッシュボード上部に以下3パターンの比較タブを一時的に表示する。
+
+| パターン            | 意図                                                     |
+| ------------------- | -------------------------------------------------------- |
+| パターンA：現場運用 | 案件数・期限・未入金をテーブル中心で確認する             |
+| パターンB：経営指標 | 受注・売上・全体売上推移・構成比をチャート中心で確認する |
+| パターンC：売上台帳 | 案件別・依頼主別・エリア/区分別・外注費確認に寄せる      |
+
+最終デザイン確定後、この比較タブは削除し、選ばれた1パターンに統合する。
+
 ### 指標カード
 
-| 指標 | 元データ | 集計ロジック |
-|---|---|---|
-| 総案件数 | `cases` | `COUNT(*)`（`cancelled` を除く） |
-| 進行中 | `cases` | `status = 'in_progress'` の件数 |
-| 期限超過 | `cases` | `deadline_date < CURRENT_DATE AND status NOT IN ('completed','cancelled')` |
-| 期限間近（7 日以内） | `cases` | `deadline_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 7 AND status NOT IN ('completed','cancelled')` |
+| 指標                 | 元データ | 集計ロジック                                                                                          |
+| -------------------- | -------- | ----------------------------------------------------------------------------------------------------- |
+| 総案件数             | `cases`  | `COUNT(*)`（`cancelled` を除く）                                                                      |
+| 進行中               | `cases`  | `status = 'in_progress'` の件数                                                                       |
+| 期限超過             | `cases`  | `deadline_date < CURRENT_DATE AND status NOT IN ('completed','cancelled')`                            |
+| 期限間近（7 日以内） | `cases`  | `deadline_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 7 AND status NOT IN ('completed','cancelled')` |
 
 ### テーブル：期限超過・期限間近の案件
 
@@ -75,6 +96,17 @@
 - 系列：新規案件数 / 完了案件数 / 請求額（税込） / 入金額
 - 型：棒グラフ（件数）＋折れ線（金額）の複合 or 2 枚分割
 - 色：`CHART_1`, `CHART_2`, `CHART_3`, `CHART_8` を使用（CLAUDE.md §4.3）
+
+### 経営指標（社長アカウント限定）
+
+- 棒グラフ：行政書士業務／土地業務／建物業務の受注・売上
+  - 現行DBでは `case_type` から分類する
+  - 受注は `invoice_amount`、売上は `paid_amount` を基準にする
+- 折れ線：全体売上（過去12ヶ月の `paid_amount`）
+- 円グラフ：ボタン切替で取引先別／業務区分別の構成比（％）を表示する
+- 業者ごとの受注月分析：取引先行をクリックすると月別の受注・売上を表示する
+- 売上：案件ごと／依頼主ごと／エリア・区分をボタンで切り替える
+- 外注費：現行DBに外注費入力元がないため、比較UIでは「未登録」として表示する。正式実装時は外注費テーブルと入力画面を追加してから、外注先一覧、全体・個別・月別を表示する。
 
 ---
 
@@ -225,9 +257,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-[var(--space-l)]">
-      <h1 className="text-xl font-bold text-[color:var(--color-text-black)]">
-        ダッシュボード
-      </h1>
+      <h1 className="text-xl font-bold text-[color:var(--color-text-black)]">ダッシュボード</h1>
       <DashboardCards data={summaryRes.data} />
       <OverdueTable rows={overdueRes.data ?? []} />
       <UnpaidTable rows={unpaidRes.data ?? []} />
@@ -248,11 +278,11 @@ export default async function DashboardPage() {
 
 全画面の右上または SideNav 下部に以下の簡易インジケーターを表示する。Server Component で計算しレイアウトに埋め込む。
 
-| インジケーター | 内容 | 色 |
-|---|---|---|
-| 期限超過 | 締切日を過ぎた案件数 | `DANGER` |
-| 期限間近 | 7 日以内に締切の案件数 | `WARNING_YELLOW` + `TEXT_BLACK` |
-| 進行中 | `in_progress` の案件数 | `MAIN` |
+| インジケーター | 内容                   | 色                              |
+| -------------- | ---------------------- | ------------------------------- |
+| 期限超過       | 締切日を過ぎた案件数   | `DANGER`                        |
+| 期限間近       | 7 日以内に締切の案件数 | `WARNING_YELLOW` + `TEXT_BLACK` |
+| 進行中         | `in_progress` の案件数 | `MAIN`                          |
 
 クリックすると案件一覧にフィルタ付きで遷移（`/cases?filter=overdue` 等）。
 
