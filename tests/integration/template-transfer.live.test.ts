@@ -460,7 +460,7 @@ describe.skipIf(!LIVE)("live template transfer", () => {
 
     expect(checked.length, "検証可能なWordテンプレートがありません。").toBeGreaterThan(0);
     expect(failures).toEqual([]);
-  }, 30_000);
+  }, 120_000);
 
   it("Supabase上の有効なExcelテンプレートへマッピング座標どおり転記できる", async () => {
     const templates = (await fetchLiveTemplates()).filter(
