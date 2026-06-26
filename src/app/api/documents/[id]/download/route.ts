@@ -4,21 +4,22 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
 import { requestIpFromHeaders } from "@/lib/request-ip";
+import { attachmentHeaders, parsePositiveInteger } from "@/lib/security/download";
 
-export async function GET(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
   if (!user) return new NextResponse("Unauthorized", { status: 401 });
 
   const { id } = await params;
+  const documentId = parsePositiveInteger(id);
+  if (!documentId) return new NextResponse("Bad Request", { status: 400 });
+
   const supabase = await createClient();
 
   const { data: history, error } = await supabase
     .from("document_histories")
     .select("*")
-    .eq("id", Number(id))
+    .eq("id", documentId)
     .single();
 
   if (error || !history) return new NextResponse("Not Found", { status: 404 });
@@ -50,9 +51,6 @@ export async function GET(
       : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
   return new NextResponse(blob, {
-    headers: {
-      "Content-Type": contentType,
-      "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(history.file_name)}`,
-    },
+    headers: attachmentHeaders(contentType, history.file_name),
   });
 }

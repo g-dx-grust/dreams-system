@@ -37,9 +37,7 @@ const RoleSchema = z.object({
   role: z.enum(["admin", "user"]),
 });
 
-export async function listUsers(
-  input: ListUsersInput = {},
-): Promise<ActionResult<UserRow[]>> {
+export async function listUsers(input: ListUsersInput = {}): Promise<ActionResult<UserRow[]>> {
   await requireAdmin();
   const supabase = await createClient();
 
@@ -87,7 +85,7 @@ export async function inviteUser(raw: {
   role: "admin" | "user";
 }): Promise<ActionResult<{ id: string }>> {
   const actor = await requireAdmin();
-  const parsed = InviteSchema.safeParse(raw);
+  const parsed = InviteSchema.safeParse({ ...raw, email: raw.email.trim().toLowerCase() });
   if (!parsed.success) return fail(parsed.error.errors[0]?.message ?? "入力が不正です");
 
   const admin = createAdminClient();
@@ -155,10 +153,7 @@ export async function setUserActive(
   if (!userId) return fail("ユーザーIDが不正です");
 
   const supabase = await createClient();
-  const { error } = await supabase
-    .from("users")
-    .update({ is_active: isActive })
-    .eq("id", userId);
+  const { error } = await supabase.from("users").update({ is_active: isActive }).eq("id", userId);
 
   if (error) return fail("アカウント状態の変更に失敗しました");
 

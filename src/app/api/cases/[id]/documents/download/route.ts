@@ -5,6 +5,12 @@ import { getCurrentUser } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
 import { requestIpFromHeaders } from "@/lib/request-ip";
 import {
+  attachmentHeaders,
+  parsePositiveInteger,
+  parsePositiveIntegerList,
+  sanitizeDownloadFileName,
+} from "@/lib/security/download";
+import {
   buildParcelAttachmentFileName,
   buildParcelAttachmentXlsx,
   type ParcelAttachmentRow,
@@ -12,21 +18,18 @@ import {
 
 export const runtime = "nodejs";
 
-export async function GET(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
   if (!user) return new NextResponse("Unauthorized", { status: 401 });
 
   const { id } = await params;
-  const caseId = Number(id);
-  if (!Number.isInteger(caseId) || caseId <= 0) {
+  const caseId = parsePositiveInteger(id);
+  if (!caseId) {
     return new NextResponse("Bad Request", { status: 400 });
   }
 
   const url = new URL(req.url);
-  const documentIds = parseIds(url.searchParams.get("ids"));
+  const documentIds = parsePositiveIntegerList(url.searchParams.get("ids"), 100);
   if (documentIds.length === 0) {
     return new NextResponse("Bad Request", { status: 400 });
   }
@@ -57,7 +60,10 @@ export async function GET(
     if (downloadError || !blob) continue;
 
     const buffer = Buffer.from(await blob.arrayBuffer());
-    zip.file(uniqueFileName(history.file_name, usedNames), buffer);
+    zip.file(
+      uniqueFileName(sanitizeDownloadFileName(history.file_name, "document"), usedNames),
+      buffer,
+    );
   }
 
   if (includeParcelAttachment) {
@@ -77,7 +83,13 @@ export async function GET(
       const attachmentName = buildParcelAttachmentFileName(
         caseRow?.case_number ?? `case-${caseId}`,
       );
-      zip.file(uniqueFileName(attachmentName, usedNames), attachment);
+      zip.file(
+        uniqueFileName(
+          sanitizeDownloadFileName(attachmentName, "parcel_attachment.xlsx"),
+          usedNames,
+        ),
+        attachment,
+      );
     }
   }
 
@@ -111,24 +123,8 @@ export async function GET(
   });
 
   return new NextResponse(zipBody, {
-    headers: {
-      "Content-Type": "application/zip",
-      "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`,
-      "Cache-Control": "no-store",
-    },
+    headers: attachmentHeaders("application/zip", fileName),
   });
-}
-
-function parseIds(raw: string | null): number[] {
-  if (!raw) return [];
-  return Array.from(
-    new Set(
-      raw
-        .split(",")
-        .map((value) => Number(value.trim()))
-        .filter((value) => Number.isInteger(value) && value > 0),
-    ),
-  );
 }
 
 function uniqueFileName(fileName: string, usedNames: Set<string>) {

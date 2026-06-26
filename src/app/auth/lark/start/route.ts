@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { buildLarkAuthorizationUrl } from "@/lib/lark/oauth";
+import { safeRedirectPath } from "@/lib/security/redirect";
 
 const STATE_COOKIE = "dreams_lark_oauth_state";
 const NEXT_COOKIE = "dreams_lark_oauth_next";
@@ -13,17 +14,6 @@ function cookieOptions() {
     path: "/auth/lark",
     maxAge: COOKIE_MAX_AGE_SECONDS,
   };
-}
-
-function safeNextPath(value: string | null): string {
-  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/";
-  try {
-    const parsed = new URL(value, "https://app.local");
-    if (parsed.origin !== "https://app.local") return "/";
-    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
-  } catch {
-    return "/";
-  }
 }
 
 function callbackUrl(req: Request): string {
@@ -45,6 +35,10 @@ export async function GET(req: Request) {
 
   const response = NextResponse.redirect(authUrl.data);
   response.cookies.set(STATE_COOKIE, state, cookieOptions());
-  response.cookies.set(NEXT_COOKIE, safeNextPath(url.searchParams.get("next")), cookieOptions());
+  response.cookies.set(
+    NEXT_COOKIE,
+    safeRedirectPath(url.searchParams.get("next")),
+    cookieOptions(),
+  );
   return response;
 }

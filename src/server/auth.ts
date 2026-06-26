@@ -53,6 +53,23 @@ export async function signInWithEmailPassword(input: {
     return fail("メールアドレスまたはパスワードが正しくありません。");
   }
 
+  const { data: profile } = await supabase
+    .from("users")
+    .select("is_active")
+    .eq("id", data.user.id)
+    .single();
+  if (!profile?.is_active) {
+    await supabase.auth.signOut();
+    await logSystemAudit({
+      userId: data.user.id,
+      action: "auth.login_failure",
+      entityType: "auth",
+      detail: { email, reason: "inactive_user" },
+      ipAddress,
+    });
+    return fail("このアカウントは無効です。管理者に確認してください。");
+  }
+
   await logSystemAudit({
     userId: data.user.id,
     action: "auth.login_success",

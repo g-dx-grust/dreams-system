@@ -18,6 +18,8 @@ const LOGIN_ERROR_MESSAGES: Record<string, string> = {
   lark_token_failed: "Larkログインの認証に失敗しました。時間をおいて再度お試しください。",
   lark_profile_failed:
     "Larkアカウント情報を取得できませんでした。Larkアプリの権限設定を確認してください。",
+  unregistered_user:
+    "このアカウントはシステムに登録されていません。管理者に招待を依頼してください。",
   inactive_user: "このアカウントは無効です。管理者に確認してください。",
   auth_callback_failed: "ログイン処理に失敗しました。時間をおいて再度お試しください。",
 };

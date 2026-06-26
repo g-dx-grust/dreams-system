@@ -5,6 +5,7 @@ import { requestIpFromHeaders } from "@/lib/request-ip";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { exchangeLarkCode, getLarkOAuthUserProfile } from "@/lib/lark/oauth";
+import { safeRedirectPath } from "@/lib/security/redirect";
 import { syncLarkAuthenticatedUserProfile } from "@/server/auth-profile";
 
 const STATE_COOKIE = "dreams_lark_oauth_state";
@@ -25,17 +26,6 @@ function callbackUrl(req: Request): string {
   return `${origin}/auth/lark/callback`;
 }
 
-function safeNextPath(value: string | undefined): string {
-  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/";
-  try {
-    const parsed = new URL(value, "https://app.local");
-    if (parsed.origin !== "https://app.local") return "/";
-    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
-  } catch {
-    return "/";
-  }
-}
-
 function redirectAndClear(req: Request, path: string): NextResponse {
   const response = NextResponse.redirect(new URL(path, req.url));
   response.cookies.set(STATE_COOKIE, "", expiredCookieOptions());
@@ -51,6 +41,18 @@ async function logFailure(req: Request, reason: string, detail: Record<string, u
     detail: { provider: "lark", reason, ...detail },
     ipAddress: requestIpFromHeaders(req.headers),
   });
+}
+
+async function findRegisteredActiveUser(
+  admin: ReturnType<typeof createAdminClient>,
+  email: string,
+) {
+  return await admin
+    .from("users")
+    .select("id, email, is_active")
+    .eq("email", email)
+    .eq("is_active", true)
+    .maybeSingle();
 }
 
 export async function GET(req: Request) {
@@ -97,6 +99,15 @@ export async function GET(req: Request) {
   };
 
   const admin = createAdminClient();
+  const registeredUser = await findRegisteredActiveUser(admin, larkProfile.data.email);
+  if (registeredUser.error || !registeredUser.data) {
+    await logFailure(req, registeredUser.error ? "profile_lookup_failed" : "unregistered_user", {
+      email: larkProfile.data.email,
+      message: registeredUser.error?.message,
+    });
+    return redirectAndClear(req, "/login?error=unregistered_user");
+  }
+
   const link = await admin.auth.admin.generateLink({
     type: "magiclink",
     email: larkProfile.data.email,
@@ -119,6 +130,12 @@ export async function GET(req: Request) {
       email: larkProfile.data.email,
       message: verified.error?.message,
     });
+    return redirectAndClear(req, "/login?error=auth_callback_failed");
+  }
+
+  if (verified.data.user.id !== registeredUser.data.id) {
+    await supabase.auth.signOut();
+    await logFailure(req, "user_id_mismatch", { email: larkProfile.data.email });
     return redirectAndClear(req, "/login?error=auth_callback_failed");
   }
 
@@ -151,5 +168,5 @@ export async function GET(req: Request) {
     ipAddress: requestIpFromHeaders(req.headers),
   });
 
-  return redirectAndClear(req, safeNextPath(nextFromCookie));
+  return redirectAndClear(req, safeRedirectPath(nextFromCookie));
 }
