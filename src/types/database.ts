@@ -1056,6 +1056,9 @@ export type Database = {
           full_name: string | null
           id: string
           is_active: boolean
+          lark_open_id: string | null
+          lark_synced_at: string | null
+          lark_union_id: string | null
           last_signed_in: string | null
           role: string
           updated_at: string
@@ -1067,6 +1070,9 @@ export type Database = {
           full_name?: string | null
           id: string
           is_active?: boolean
+          lark_open_id?: string | null
+          lark_synced_at?: string | null
+          lark_union_id?: string | null
           last_signed_in?: string | null
           role?: string
           updated_at?: string
@@ -1078,6 +1084,9 @@ export type Database = {
           full_name?: string | null
           id?: string
           is_active?: boolean
+          lark_open_id?: string | null
+          lark_synced_at?: string | null
+          lark_union_id?: string | null
           last_signed_in?: string | null
           role?: string
           updated_at?: string

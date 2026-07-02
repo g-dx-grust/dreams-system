@@ -43,16 +43,37 @@ async function logFailure(req: Request, reason: string, detail: Record<string, u
   });
 }
 
+type RegisteredUserLookup = {
+  data: { id: string; email: string; is_active: boolean } | null;
+  error: { message: string } | null;
+};
+
+// lark_open_idを第一キーに照合し、未連携ユーザーのみメールで照合する。
+// see: ../../../..//G-DX_Lark_Integration_Rules.md §2.2
 async function findRegisteredActiveUser(
   admin: ReturnType<typeof createAdminClient>,
-  email: string,
-) {
-  return await admin
-    .from("users")
-    .select("id, email, is_active")
-    .eq("email", email)
-    .eq("is_active", true)
-    .maybeSingle();
+  profile: { openId: string | null; email: string | null },
+): Promise<RegisteredUserLookup> {
+  if (profile.openId) {
+    const byOpenId = await admin
+      .from("users")
+      .select("id, email, is_active")
+      .eq("lark_open_id", profile.openId)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (byOpenId.error || byOpenId.data) return byOpenId;
+  }
+
+  if (profile.email) {
+    return await admin
+      .from("users")
+      .select("id, email, is_active")
+      .eq("email", profile.email)
+      .eq("is_active", true)
+      .maybeSingle();
+  }
+
+  return { data: null, error: null };
 }
 
 export async function GET(req: Request) {
@@ -99,10 +120,14 @@ export async function GET(req: Request) {
   };
 
   const admin = createAdminClient();
-  const registeredUser = await findRegisteredActiveUser(admin, larkProfile.data.email);
+  const registeredUser = await findRegisteredActiveUser(admin, {
+    openId: larkProfile.data.openId,
+    email: larkProfile.data.email,
+  });
   if (registeredUser.error || !registeredUser.data) {
     await logFailure(req, registeredUser.error ? "profile_lookup_failed" : "unregistered_user", {
       email: larkProfile.data.email,
+      lark_open_id: larkProfile.data.openId,
       message: registeredUser.error?.message,
     });
     return redirectAndClear(req, "/login?error=unregistered_user");
@@ -110,7 +135,7 @@ export async function GET(req: Request) {
 
   const link = await admin.auth.admin.generateLink({
     type: "magiclink",
-    email: larkProfile.data.email,
+    email: registeredUser.data.email,
     options: { data: metadata },
   });
 

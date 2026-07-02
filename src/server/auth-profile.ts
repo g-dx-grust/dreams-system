@@ -49,17 +49,18 @@ export async function syncLarkAuthenticatedUserProfile(input: {
 
   try {
     const admin = createAdminClient();
-    const { error } = await admin.from("users").upsert(
-      {
-        id: input.userId,
-        email: input.profile.email,
-        full_name: input.profile.fullName,
-        avatar_url: input.profile.avatarUrl,
+    // emailはauth.usersとの一致が前提（マジックリンク生成に使用）のため、ここでは更新しない
+    const { error } = await admin
+      .from("users")
+      .update({
+        ...(input.profile.fullName ? { full_name: input.profile.fullName } : {}),
+        ...(input.profile.avatarUrl ? { avatar_url: input.profile.avatarUrl } : {}),
+        ...(input.profile.openId ? { lark_open_id: input.profile.openId } : {}),
+        ...(input.profile.unionId ? { lark_union_id: input.profile.unionId } : {}),
         last_signed_in: now,
         updated_at: now,
-      },
-      { onConflict: "id" },
-    );
+      })
+      .eq("id", input.userId);
     if (error) {
       console.error("[auth] Lark profile sync failed", { userId: input.userId, error });
     }

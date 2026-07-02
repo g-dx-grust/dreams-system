@@ -29,7 +29,8 @@ export type AuditAction =
   | "user.invite"
   | "user.role_change"
   | "user.deactivate"
-  | "user.activate";
+  | "user.activate"
+  | "user.lark_sync";
 
 export type AuditInput = {
   userId: string;

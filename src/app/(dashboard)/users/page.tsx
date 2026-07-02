@@ -7,6 +7,7 @@ import { Empty } from "@/components/ui/empty";
 import { UsersFilter } from "@/components/users/users-filter";
 import { UserListTable } from "@/components/users/user-list-table";
 import { UserInviteDialog } from "@/components/users/user-invite-dialog";
+import { LarkSyncButton } from "@/components/users/lark-sync-button";
 
 type Search = {
   q?: string;
@@ -40,8 +41,13 @@ export default async function UsersPage({
     <>
       <PageHeader
         title="ユーザー管理"
-        description="システムにアクセスできるユーザーを管理します。"
-        actions={<UserInviteDialog />}
+        description="システムにアクセスできるユーザーを管理します。Lark同期を実行すると、テナントの全メンバーが招待メールなしで利用できるようになります。"
+        actions={
+          <div className="flex items-center gap-s">
+            <LarkSyncButton />
+            <UserInviteDialog />
+          </div>
+        }
       />
       <div className="space-y-l">
         <Card>

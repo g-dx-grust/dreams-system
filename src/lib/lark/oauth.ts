@@ -10,7 +10,7 @@ import {
 const DEFAULT_LOGIN_SCOPE = "contact:user.base:readonly contact:user.email:readonly";
 
 export type LarkOAuthUserProfile = {
-  email: string;
+  email: string | null;
   fullName: string | null;
   avatarUrl: string | null;
   openId: string | null;
@@ -166,19 +166,20 @@ export async function getLarkOAuthUserProfile(
   ];
 
   const email = firstText(records, ["email", "enterprise_email", "user_email", "mail"]);
-  if (!email) {
+  const openId = firstText(records, ["open_id", "openId"]);
+  if (!email && !openId) {
     return fail(
-      "Larkアカウントのメールアドレスを取得できませんでした。Larkアプリのメール取得権限を確認してください。",
+      "Larkアカウントを識別できませんでした。Larkアプリのユーザー情報取得権限を確認してください。",
     );
   }
 
   return ok({
-    email: email.toLowerCase(),
+    email: email?.toLowerCase() ?? null,
     fullName: firstText(records, ["name", "full_name", "display_name", "en_name"]),
     avatarUrl: safeHttpUrl(
       firstText(records, ["avatar_url", "avatar", "avatar_thumb", "avatar_middle", "avatar_big"]),
     ),
-    openId: firstText(records, ["open_id", "openId"]),
+    openId,
     unionId: firstText(records, ["union_id", "unionId"]),
   });
 }
