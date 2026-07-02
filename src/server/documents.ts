@@ -8,7 +8,7 @@ import { requireUser } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
 import { type ActionResult, fail, ok } from "@/lib/result";
 import { buildTransferContext } from "@/lib/transfer/context-builder";
-import { fillDocx } from "@/lib/transfer/docx";
+import { fillDocx, TransferTagError } from "@/lib/transfer/docx";
 import { fillXlsx } from "@/lib/transfer/xlsx";
 import { formatMissingRequiredMessage, preCheck } from "@/lib/transfer/precheck";
 import { isDebugTemplateDescription } from "@/lib/templates/check-template";
@@ -171,10 +171,27 @@ export async function generateDocument(
   }
 
   let outputBuf: Buffer;
-  if (fileType === "docx") {
-    outputBuf = fillDocx(templateBuf, ctx, parsed.data.highlight, mappings);
-  } else {
-    outputBuf = await fillXlsx(templateBuf, ctx, mappings, parsed.data.highlight);
+  try {
+    if (fileType === "docx") {
+      outputBuf = fillDocx(templateBuf, ctx, parsed.data.highlight, mappings);
+    } else {
+      outputBuf = await fillXlsx(templateBuf, ctx, mappings, parsed.data.highlight);
+    }
+  } catch (error) {
+    console.error("document.generate transfer failed", {
+      caseId: parsed.data.caseId,
+      templateId: parsed.data.templateId,
+      templateName: template.name,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    if (error instanceof TransferTagError) {
+      return fail(
+        `テンプレート「${template.name}」の${error.message}。テンプレートの { } を確認してください。`,
+      );
+    }
+    return fail(
+      `テンプレート「${template.name}」の帳票生成に失敗しました。テンプレートファイルを確認してください。`,
+    );
   }
 
   const caseRow = caseRes.data as CaseRow;

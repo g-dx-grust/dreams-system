@@ -186,6 +186,42 @@ describe("fillDocx", () => {
     expect(text).toContain("申請者:田中太郎-2026-FC-001;佐藤花子-2026-FC-001;");
   });
 
+  it("複数行の差し込み値は改行を半角スペースに置換して単語結合を防ぐ", () => {
+    const template = createDocxTemplate("理由:{caseMemo}");
+    const context = buildTransferContext({
+      caseMemo: "資材置場として利用するため\r\n進入路を確保する必要があるため",
+    });
+
+    const rendered = fillDocx(template, context, false);
+    const text = extractDocumentText(rendered);
+
+    expect(text).toContain("資材置場として利用するため 進入路を確保する必要があるため");
+    expect(text).not.toContain("ため進入路");
+  });
+
+  it("素の { を含む不正テンプレートはタグ名入りの日本語エラーになる", () => {
+    const template = createDocxTemplate("注記: 会社名{ を記入してください");
+
+    let caught: unknown;
+    try {
+      fillDocx(template, buildTransferContext(), false);
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(Error);
+    const message = (caught as Error).message;
+    expect(message).toMatch(/差し込みタグ/);
+    expect(message).toMatch(/「.+」/);
+    expect(message).not.toMatch(/[a-z_]+_tag/);
+  });
+
+  it("閉じられていない差し込みタグも日本語エラーになる", () => {
+    const template = createDocxTemplate("氏名:{applicant.name 住所:{applicant.addressFull}");
+
+    expect(() => fillDocx(template, buildTransferContext(), false)).toThrowError(/差し込みタグ/);
+  });
+
   it("旧Word変換由来の非標準OOXML名を生成時に補正する", () => {
     const zip = new PizZip(createDocxTemplate("{today}"));
     zip.file(
@@ -254,6 +290,54 @@ describe("fillDocx", () => {
     expect(text).toContain("案内図");
     expect(text).toContain("氏名 田中太郎");
     expect(xml).not.toContain("eq \\o\\ac");
+  });
+
+  it("入れ子の run を含む丸ボタン図形を除去しても XML を壊さない", () => {
+    const zip = new PizZip(createDocxTemplate("{today}"));
+    zip.file(
+      "word/document.xml",
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:v="urn:schemas-microsoft-com:vml" mc:Ignorable="wps">
+  <w:body>
+    <w:p>
+      <w:r>
+        <mc:AlternateContent>
+          <mc:Choice Requires="wps">
+            <w:drawing>
+              <wp:anchor><a:graphic><a:graphicData>
+                <wps:wsp>
+                  <wps:spPr><a:prstGeom prst="ellipse"/></wps:spPr>
+                  <wps:txbx><w:txbxContent><w:p><w:r><w:t>1</w:t></w:r></w:p></w:txbxContent></wps:txbx>
+                </wps:wsp>
+              </a:graphicData></a:graphic></wp:anchor>
+            </w:drawing>
+          </mc:Choice>
+          <mc:Fallback>
+            <w:pict><v:oval id="s1"><v:textbox><w:txbxContent><w:p><w:r><w:t>1</w:t></w:r></w:p></w:txbxContent></v:textbox></v:oval></w:pict>
+          </mc:Fallback>
+        </mc:AlternateContent>
+      </w:r>
+      <w:r><w:t>委任状 {applicant.name}</w:t></w:r>
+    </w:p>
+    <w:sectPr/>
+  </w:body>
+</w:document>`,
+    );
+
+    const rendered = fillDocx(
+      zip.generate({ type: "arraybuffer", compression: "DEFLATE" }) as ArrayBuffer,
+      buildTransferContext({ applicant: { ...EMPTY_PERSON, name: "田中太郎" } }),
+      false,
+    );
+    const xml = extractDocumentXml(rendered);
+
+    expect(xml).not.toContain("<w:drawing");
+    expect(xml).not.toContain("<w:pict");
+    expect(xml).toContain("委任状 田中太郎");
+    expect((xml.match(/<w:r[ >]/g) ?? []).length).toBe((xml.match(/<\/w:r>/g) ?? []).length);
+
+    const parsed = new DOMParser().parseFromString(xml, "text/xml");
+    expect(parsed.getElementsByTagName("parsererror")).toHaveLength(0);
   });
 
   it("複数のEQ丸数字がある旧Wordテンプレートでも露出させない", () => {

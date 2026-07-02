@@ -10,6 +10,57 @@ type ParserContext = {
   scopeList: unknown[];
 };
 
+// docxtemplater が投げるタグ不整合エラーを日本語で伝えるための例外。
+// generateDocument 側で捕捉して Result の fail に変換する。
+export class TransferTagError extends Error {}
+
+type DocxTemplaterErrorProperties = {
+  id?: string;
+  explanation?: string;
+  context?: string;
+  xtag?: string;
+  file?: string;
+  errors?: unknown[];
+};
+
+const DOCX_TAG_ERROR_LABELS: Record<string, string> = {
+  unclosed_tag: "閉じ } がないタグ",
+  unopened_tag: "開き { がないタグ",
+  duplicate_open_tag: "{ が重複しているタグ",
+  duplicate_close_tag: "} が重複しているタグ",
+  unclosed_loop: "閉じられていないループタグ",
+  unopened_loop: "開始タグのないループタグ",
+  closing_tag_does_not_match_opening_tag: "開始と終了が一致しないループタグ",
+};
+
+function docxErrorProperties(error: unknown): DocxTemplaterErrorProperties | null {
+  if (!error || typeof error !== "object") return null;
+  const properties = (error as { properties?: unknown }).properties;
+  if (!properties || typeof properties !== "object") return null;
+  return properties as DocxTemplaterErrorProperties;
+}
+
+function collectDocxTagIssues(error: unknown): string[] {
+  const properties = docxErrorProperties(error);
+  if (!properties) return [];
+
+  const nested = Array.isArray(properties.errors) ? properties.errors : [];
+  if (nested.length > 0) {
+    return nested.flatMap((child) => collectDocxTagIssues(child));
+  }
+  if (!properties.id) return [];
+
+  const label = DOCX_TAG_ERROR_LABELS[properties.id] ?? "処理できないタグ";
+  const tag = (properties.xtag || properties.context || "").trim();
+  return [tag ? `${label}「${tag}」` : label];
+}
+
+export function formatDocxTagError(error: unknown): string | null {
+  const issues = Array.from(new Set(collectDocxTagIssues(error)));
+  if (issues.length === 0) return null;
+  return `差し込みタグに問題があります: ${issues.join("、")}`;
+}
+
 const DOCX_PACKAGE_ORDER = [
   "[Content_Types].xml",
   "_rels/.rels",
@@ -180,22 +231,49 @@ function normalizeLegacyEqOverlays(xml: string) {
   );
 }
 
+function isRoundButtonShapeRun(runXml: string): boolean {
+  if (runXml.includes("<w:drawing") && /<a:prstGeom\b[^>]*\bprst="ellipse"/u.test(runXml)) {
+    return true;
+  }
+
+  return (
+    runXml.includes("<w:pict") &&
+    /<(?:v:oval|v:shape)\b/iu.test(runXml) &&
+    /(?:oval|ellipse|○|_x0000_t75)/iu.test(runXml)
+  );
+}
+
+// 図形 run はテキストボックス経由で <w:r> が入れ子になり得るため、
+// 非貪欲マッチではなく開閉タグの深さを数えて run 全体を取り出す。
 function removeRoundButtonShapeRuns(xml: string) {
-  return xml.replace(/<w:r\b[\s\S]*?<\/w:r>/gu, (runXml) => {
-    if (runXml.includes("<w:drawing") && /<a:prstGeom\b[^>]*\bprst="ellipse"/u.test(runXml)) {
-      return "";
-    }
+  const runTagRe = /<w:r\b[^>]*\/>|<w:r\b[^>]*>|<\/w:r>/gu;
+  let result = "";
+  let cursor = 0;
+  let match: RegExpExecArray | null;
 
-    if (
-      runXml.includes("<w:pict") &&
-      /<(?:v:oval|v:shape)\b/iu.test(runXml) &&
-      /(?:oval|ellipse|○|_x0000_t75)/iu.test(runXml)
-    ) {
-      return "";
-    }
+  while ((match = runTagRe.exec(xml))) {
+    const token = match[0];
+    if (token.endsWith("/>") || token.startsWith("</")) continue;
 
-    return runXml;
-  });
+    const start = match.index;
+    let depth = 1;
+    let end = -1;
+    let inner: RegExpExecArray | null;
+    while (depth > 0 && (inner = runTagRe.exec(xml))) {
+      if (inner[0].endsWith("/>")) continue;
+      depth += inner[0].startsWith("</") ? -1 : 1;
+      if (depth === 0) end = inner.index + inner[0].length;
+    }
+    if (end === -1) break;
+
+    if (isRoundButtonShapeRun(xml.slice(start, end))) {
+      result += xml.slice(cursor, start);
+      cursor = end;
+    }
+    runTagRe.lastIndex = end;
+  }
+
+  return result + xml.slice(cursor);
 }
 
 function normalizeWordXmlParts(zip: PizZip) {
@@ -234,7 +312,9 @@ function generateDocxPackage(zip: PizZip): Buffer {
 
 function normalizeDocxRenderValue(value: unknown): unknown {
   if (typeof value === "string") {
-    return value.replace(/\r\n?/g, "\n").replace(/\n+/g, "");
+    // 改行は行送りを崩さないよう単一行化するが、前後の語が連結しないよう半角スペースへ置換する。
+    // see: docs/phase3/07_transfer_engine.md §旧Word変換テンプレートの正規化
+    return value.replace(/\r\n?/g, "\n").replace(/\n+/g, " ");
   }
 
   if (Array.isArray(value)) {
@@ -263,14 +343,21 @@ export function fillDocx(
   const zip = new PizZip(templateBuffer);
   normalizeWordXmlParts(zip);
   const mappingLookup = buildMappingLookup(mappings);
-  const doc = new Docxtemplater(zip, {
-    paragraphLoop: true,
-    linebreaks: false,
-    delimiters: { start: "{", end: "}" },
-    nullGetter: () => "",
-    parser: createTransferParser(mappingLookup),
-  });
-  doc.render(normalizeDocxRenderValue(context) as Record<string, unknown>);
+  let doc: Docxtemplater;
+  try {
+    doc = new Docxtemplater(zip, {
+      paragraphLoop: true,
+      linebreaks: false,
+      delimiters: { start: "{", end: "}" },
+      nullGetter: () => "",
+      parser: createTransferParser(mappingLookup),
+    });
+    doc.render(normalizeDocxRenderValue(context) as Record<string, unknown>);
+  } catch (error) {
+    const message = formatDocxTagError(error);
+    if (message) throw new TransferTagError(message);
+    throw error;
+  }
   normalizeWordXmlParts(doc.getZip());
   return generateDocxPackage(doc.getZip());
 }
