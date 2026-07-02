@@ -398,10 +398,15 @@ export function DocumentGenerateForm({ caseId, templates, parcelCount }: Props) 
             </div>
           </div>
 
-          <label className="flex cursor-pointer items-center gap-xs text-s">
-            <Checkbox checked={highlight} onChange={(e) => setHighlight(e.target.checked)} />
-            転記箇所をハイライトする
-          </label>
+          <div className="flex flex-col gap-xs">
+            <label className="flex cursor-pointer items-center gap-xs text-s">
+              <Checkbox checked={highlight} onChange={(e) => setHighlight(e.target.checked)} />
+              転記箇所をハイライトする
+            </label>
+            <span className="text-xs text-text-grey">
+              この設定はExcel帳票に適用されます。Word帳票はテンプレート側で設定済みのハイライトが使われます。
+            </span>
+          </div>
 
           <div className="flex flex-col gap-xs rounded-s border border-border bg-background p-m text-s">
             <div className="flex flex-wrap items-center justify-between gap-s">
