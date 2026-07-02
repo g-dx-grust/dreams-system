@@ -10,7 +10,10 @@ import { createClient } from "@/lib/supabase/server";
 import { requireUser, requireAdmin } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
 import { type ActionResult, fail, ok } from "@/lib/result";
-import { detectPlaceholdersInDocx } from "@/lib/transfer/detect-placeholders";
+import {
+  detectPlaceholdersInDocx,
+  listDocxTextPartNames,
+} from "@/lib/transfer/detect-placeholders";
 import { buildTransferContext } from "@/lib/transfer/context-builder";
 import { preCheck } from "@/lib/transfer/precheck";
 import type { Mapping } from "@/lib/transfer/engine";
@@ -338,16 +341,6 @@ const XLSX_PREVIEW_MAX_COLUMNS = 40;
 const DOCX_PREVIEW_MAX_BLOCKS = 90;
 const DOCX_PREVIEW_MAX_TEXT_LENGTH = 6000;
 
-const DOCX_PREVIEW_XMLS = [
-  "word/document.xml",
-  "word/header1.xml",
-  "word/header2.xml",
-  "word/header3.xml",
-  "word/footer1.xml",
-  "word/footer2.xml",
-  "word/footer3.xml",
-];
-
 const DOCX_PLACEHOLDER_RE = /\{([^{}#/^][^{}]*)\}/g;
 
 function columnNumberToName(columnNumber: number) {
@@ -483,7 +476,7 @@ function buildDocxPreview(buffer: ArrayBuffer): TemplatePreview {
   let textLength = 0;
   let truncated = false;
 
-  for (const path of DOCX_PREVIEW_XMLS) {
+  for (const path of listDocxTextPartNames(zip)) {
     const file = zip.file(path);
     if (!file) continue;
 
