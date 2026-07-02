@@ -7,6 +7,14 @@ import { resolvePath, resolveRawPath, type Mapping } from "./engine";
 const HIGHLIGHT_ARGB = "FFFFFF00";
 const LOOP_NAME_RE = /^loop_([a-zA-Z0-9_]+)_start$/;
 
+// 数値化してよいのは金額・面積系のみ。法人番号・地番・郵便番号などの数字文字列を
+// 数値化すると先頭ゼロ消失・指数表示・桁落ちが起きるため、それ以外は文字列で保持する。
+const NUMERIC_FIELD_RE = /amount|area/i;
+
+function isNumericFieldPath(fieldPath: string): boolean {
+  return NUMERIC_FIELD_RE.test(fieldPath);
+}
+
 export async function fillXlsx(
   templateBuffer: ArrayBuffer,
   context: TransferContext,
@@ -22,16 +30,19 @@ export async function fillXlsx(
 
   for (const mapping of mappings) {
     const value = resolvePath(context, mapping.fieldPath);
-    if (value === "") continue;
 
     const { sheetName, cellRef } = parsePlaceholder(mapping.placeholder, wb);
     const ws = sheetName ? wb.getWorksheet(sheetName) : wb.worksheets[0];
     if (!ws) continue;
 
     try {
-      const cell = ws.getCell(cellRef);
+      // 結合セルの非アンカー座標を指すマッピングでも、値とハイライトはアンカー（左上）へ入れる。
+      const cell = anchorCell(ws, cellRef);
       const replaced = replaceCellPlaceholders(cell.value, mapping, value);
-      cell.value = replaced ?? coerceValue(value);
+      // セル内トークンは空値でも除去する。純粋な座標マッピング（トークンなし）の空値は
+      // テンプレートの既定表示を壊さないため書き換えない。
+      if (replaced === null && value === "") continue;
+      cell.value = replaced ?? (isNumericFieldPath(mapping.fieldPath) ? coerceValue(value) : value);
       if (highlight) {
         cell.fill = {
           type: "pattern",
@@ -68,6 +79,69 @@ type TemplateRow = {
   cells: TemplateCell[];
 };
 
+type TemplateMergeRange = {
+  startRowOffset: number;
+  endRowOffset: number;
+  startCol: number;
+  endCol: number;
+};
+
+function anchorCell(ws: ExcelJS.Worksheet, cellRef: string): ExcelJS.Cell {
+  const cell = ws.getCell(cellRef);
+  return cell.isMerged ? ws.getCell(cell.master.address) : cell;
+}
+
+// ループ範囲内に収まる結合範囲を、セルの master 参照から復元する（公開 API のみ使用）。
+function captureMerges(
+  ws: ExcelJS.Worksheet,
+  startRow: number,
+  endRow: number,
+): TemplateMergeRange[] {
+  const groups = new Map<
+    string,
+    { minRow: number; maxRow: number; minCol: number; maxCol: number }
+  >();
+
+  for (let rowNumber = startRow; rowNumber <= endRow; rowNumber += 1) {
+    ws.getRow(rowNumber).eachCell({ includeEmpty: true }, (cell, col) => {
+      if (!cell.isMerged) return;
+      const masterAddress = cell.master.address;
+      const group = groups.get(masterAddress) ?? {
+        minRow: rowNumber,
+        maxRow: rowNumber,
+        minCol: col,
+        maxCol: col,
+      };
+      group.minRow = Math.min(group.minRow, rowNumber);
+      group.maxRow = Math.max(group.maxRow, rowNumber);
+      group.minCol = Math.min(group.minCol, col);
+      group.maxCol = Math.max(group.maxCol, col);
+      groups.set(masterAddress, group);
+    });
+  }
+
+  const merges: TemplateMergeRange[] = [];
+  groups.forEach((group, masterAddress) => {
+    const masterRow = rowNumberFromCellRef(masterAddress);
+    // ループ範囲の外へはみ出す結合（上から続く・下へ続く）は複製対象にしない。
+    if (masterRow == null || masterRow < startRow) return;
+    if (group.maxRow === endRow) {
+      const below = ws.getRow(endRow + 1).getCell(group.minCol);
+      if (below.isMerged && below.master.address === masterAddress) return;
+    }
+    if (group.minRow === group.maxRow && group.minCol === group.maxCol) return;
+
+    merges.push({
+      startRowOffset: group.minRow - startRow,
+      endRowOffset: group.maxRow - startRow,
+      startCol: group.minCol,
+      endCol: group.maxCol,
+    });
+  });
+
+  return merges;
+}
+
 function expandLoopRows(wb: ExcelJS.Workbook, context: TransferContext) {
   for (const marker of findLoopMarkers(wb)) {
     const ws = wb.getWorksheet(marker.sheetName);
@@ -80,6 +154,7 @@ function expandLoopRows(wb: ExcelJS.Workbook, context: TransferContext) {
     if (rowCount <= 0) continue;
 
     const templateRows = captureRows(ws, marker.startRow, marker.endRow);
+    const templateMerges = captureMerges(ws, marker.startRow, marker.endRow);
     if (collection.length === 0) {
       ws.spliceRows(marker.startRow, rowCount);
       continue;
@@ -91,14 +166,25 @@ function expandLoopRows(wb: ExcelJS.Workbook, context: TransferContext) {
     }
 
     collection.forEach((item, itemIndex) => {
+      const blockStartRow = marker.startRow + itemIndex * rowCount;
       templateRows.forEach((templateRow, rowOffset) => {
-        const targetRowNumber = marker.startRow + itemIndex * rowCount + rowOffset;
-        applyTemplateRow(ws, targetRowNumber, templateRow, {
+        applyTemplateRow(ws, blockStartRow + rowOffset, templateRow, {
           context,
           collectionName: marker.collectionName,
           item,
         });
       });
+
+      // 先頭ブロックは元テンプレ行の結合が残っているため、複製ブロックのみ張り直す。
+      if (itemIndex === 0) return;
+      for (const merge of templateMerges) {
+        ws.mergeCells(
+          blockStartRow + merge.startRowOffset,
+          merge.startCol,
+          blockStartRow + merge.endRowOffset,
+          merge.endCol,
+        );
+      }
     });
   }
 }
@@ -133,14 +219,12 @@ function definedNameRanges(
   wb: ExcelJS.Workbook,
 ): Map<string, { sheetName: string; cellRef: string }> {
   const ranges = new Map<string, { sheetName: string; cellRef: string }>();
-  const matrixMap = (wb.definedNames as unknown as { matrixMap?: Record<string, unknown> })
-    .matrixMap;
-  if (!matrixMap) return ranges;
 
-  Object.keys(matrixMap).forEach((name) => {
-    const range = rangeFromDefinedName(wb, name);
-    if (range) ranges.set(name, range);
-  });
+  for (const definedName of wb.definedNames.model) {
+    if (!definedName?.name || ranges.has(definedName.name)) continue;
+    const range = rangeFromDefinedName(wb, definedName.name);
+    if (range) ranges.set(definedName.name, range);
+  }
 
   return ranges;
 }
@@ -220,7 +304,11 @@ function replaceLoopPlaceholders(
     resolveLoopToken(rawToken, scope),
   );
 
-  return cellValue.trim().match(/^\{[^{}]+\}$/) ? coerceValue(next) : next;
+  const singleToken = cellValue.trim().match(/^\{([^{}]+)\}$/);
+  if (singleToken?.[1] && isNumericFieldPath(canonicalizeFieldPath(singleToken[1].trim()))) {
+    return coerceValue(next);
+  }
+  return next;
 }
 
 function resolveLoopToken(

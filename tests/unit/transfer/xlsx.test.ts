@@ -158,6 +158,77 @@ describe("fillXlsx", () => {
     expect(rendered.getWorksheet("帳票")?.getCell("A1").value).toBe("作成日: 令和8年4月24日");
   });
 
+  it("空値でもセル内の埋め込みトークンは除去される", async () => {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("帳票");
+    sheet.getCell("A1").value = "氏名:{applicant.name}";
+    sheet.getCell("B2").value = "placeholder";
+    const template = (await workbook.xlsx.writeBuffer()) as ArrayBuffer;
+    const context = buildTransferContext();
+    const mappings: Mapping[] = [
+      { placeholder: "A1", fieldPath: "applicant.name" },
+      { placeholder: "B2", fieldPath: "applicant.name" },
+    ];
+
+    const output = await fillXlsx(template, context, mappings, false);
+    const rendered = await loadWorkbook(output);
+    const renderedSheet = rendered.getWorksheet("帳票");
+
+    expect(renderedSheet?.getCell("A1").value).toBe("氏名:");
+    expect(renderedSheet?.getCell("B2").value).toBe("placeholder");
+  });
+
+  it("結合セルの非アンカー座標へのマッピングでもアンカーに転記する", async () => {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("帳票");
+    sheet.mergeCells("A1:C1");
+    const template = (await workbook.xlsx.writeBuffer()) as ArrayBuffer;
+    const context = buildTransferContext({
+      applicant: { ...EMPTY_PERSON, name: "田中太郎" },
+    });
+    const mappings: Mapping[] = [{ placeholder: "B1", fieldPath: "applicant.name" }];
+
+    const output = await fillXlsx(template, context, mappings, true);
+    const rendered = await loadWorkbook(output);
+    const renderedSheet = rendered.getWorksheet("帳票");
+
+    expect(renderedSheet?.getCell("A1").value).toBe("田中太郎");
+    expect(renderedSheet?.getCell("A1").fill).toEqual({
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFFFFF00" },
+    });
+  });
+
+  it("結合を含むループ行を複製しても各行の結合が保たれる", async () => {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("帳票");
+    sheet.mergeCells("A5:B5");
+    sheet.getCell("A5").value = "{parcel.chiban}";
+    sheet.getCell("C5").value = "{parcel.area}";
+    sheet.getCell("A6").value = "footer";
+    workbook.definedNames.add("帳票!$A$5", "loop_parcels_start");
+    workbook.definedNames.add("帳票!$A$5", "loop_parcels_end");
+    const template = (await workbook.xlsx.writeBuffer()) as ArrayBuffer;
+    const context = buildTransferContext({
+      parcels: [
+        { ...EMPTY_PARCEL, chiban: "1-1", area: "120.5" },
+        { ...EMPTY_PARCEL, chiban: "2-1", area: "80" },
+      ],
+    });
+
+    const output = await fillXlsx(template, context, [], false);
+    const rendered = await loadWorkbook(output);
+    const renderedSheet = rendered.getWorksheet("帳票");
+
+    expect(renderedSheet?.getCell("A5").value).toBe("1-1");
+    expect(renderedSheet?.getCell("B5").isMerged).toBe(true);
+    expect(renderedSheet?.getCell("A6").value).toBe("2-1");
+    expect(renderedSheet?.getCell("B6").isMerged).toBe(true);
+    expect(renderedSheet?.getCell("B6").master.address).toBe("A6");
+    expect(renderedSheet?.getCell("A7").value).toBe("footer");
+  });
+
   it("loop_parcels_start/endの行を筆数分だけ複製できる", async () => {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("帳票");
@@ -187,6 +258,57 @@ describe("fillXlsx", () => {
     expect(renderedSheet?.getCell("A6").value).toBe("2-1");
     expect(renderedSheet?.getCell("B6").value).toBe(80);
     expect(renderedSheet?.getCell("A7").value).toBe("footer");
+  });
+
+  it("法人番号・地番・郵便番号は文字列のまま、金額・面積は数値で転記する", async () => {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("帳票");
+    for (const ref of ["A1", "A2", "A3", "A4", "A5"]) {
+      sheet.getCell(ref).value = "placeholder";
+    }
+    const template = (await workbook.xlsx.writeBuffer()) as ArrayBuffer;
+    const context = buildTransferContext({
+      applicant: { ...EMPTY_PERSON, corporateNumber: "1234567890123", zip: "0012345" },
+      parcel: { ...EMPTY_PARCEL, chiban: "100", area: "123.45" },
+      estimateAmountTotal: "110,000",
+    });
+    const mappings: Mapping[] = [
+      { placeholder: "A1", fieldPath: "applicant.corporateNumber" },
+      { placeholder: "A2", fieldPath: "parcel.chiban" },
+      { placeholder: "A3", fieldPath: "applicant.zip" },
+      { placeholder: "A4", fieldPath: "parcel.area" },
+      { placeholder: "A5", fieldPath: "estimateAmountTotal" },
+    ];
+
+    const output = await fillXlsx(template, context, mappings, false);
+    const rendered = await loadWorkbook(output);
+    const renderedSheet = rendered.getWorksheet("帳票");
+
+    expect(renderedSheet?.getCell("A1").value).toBe("1234567890123");
+    expect(renderedSheet?.getCell("A2").value).toBe("100");
+    expect(renderedSheet?.getCell("A3").value).toBe("0012345");
+    expect(renderedSheet?.getCell("A4").value).toBe(123.45);
+    expect(renderedSheet?.getCell("A5").value).toBe(110000);
+  });
+
+  it("ループ行でも地番は文字列のまま、面積は数値で転記する", async () => {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("帳票");
+    sheet.getCell("A5").value = "{parcel.chiban}";
+    sheet.getCell("B5").value = "{parcel.area}";
+    workbook.definedNames.add("帳票!$A$5", "loop_parcels_start");
+    workbook.definedNames.add("帳票!$A$5", "loop_parcels_end");
+    const template = (await workbook.xlsx.writeBuffer()) as ArrayBuffer;
+    const context = buildTransferContext({
+      parcels: [{ ...EMPTY_PARCEL, chiban: "100", area: "120.5" }],
+    });
+
+    const output = await fillXlsx(template, context, [], false);
+    const rendered = await loadWorkbook(output);
+    const renderedSheet = rendered.getWorksheet("帳票");
+
+    expect(renderedSheet?.getCell("A5").value).toBe("100");
+    expect(renderedSheet?.getCell("B5").value).toBe(120.5);
   });
 
   it("loop_parcels_start/endの行は筆が0件なら削除する", async () => {
